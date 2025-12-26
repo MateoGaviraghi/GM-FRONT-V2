@@ -1,0 +1,122 @@
+@import "tailwindcss";
+
+:root {
+  /* Colores base */
+  --background: #ffffff;
+  --foreground: #171717;
+
+  /* Sistema de colores para componentes UI */
+  --card: #ffffff;
+  --card-foreground: #171717;
+  --primary: #0891b2; /* cyan-600 */
+  --primary-foreground: #ffffff;
+  --secondary: #f1f5f9; /* slate-100 */
+  --secondary-foreground: #0f172a; /* slate-900 */
+  --muted: #f8fafc; /* slate-50 */
+  --muted-foreground: #64748b; /* slate-500 */
+  --accent: #f1f5f9; /* slate-100 */
+  --accent-foreground: #0f172a; /* slate-900 */
+  --destructive: #ef4444; /* red-500 */
+  --destructive-foreground: #ffffff;
+  --border: #e2e8f0; /* slate-200 */
+  --input: #e2e8f0; /* slate-200 */
+  --ring: #0891b2; /* cyan-600 */
+}
+
+/* Animaciones Keyframes */
+@keyframes gradient {
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Clases de animación */
+.animate-gradient {
+  background-size: 200% auto;
+  animation: gradient 3s ease infinite;
+}
+
+.animate-fade-in {
+  animation: fade-in 0.3s ease-out;
+}
+
+/* Ocultar scrollbar pero mantener funcionalidad */
+.scrollbar-hide {
+  -ms-overflow-style: none; /* IE and Edge */
+  scrollbar-width: none; /* Firefox */
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none; /* Chrome, Safari and Opera */
+}
+
+.animate-spin-slow {
+  animation: spin 8s linear infinite;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+}
+
+/* Hero section específico - aplicar solo a textos directos del hero */
+.hero-section h1 {
+  color: #ffffff;
+}
+
+.hero-section p {
+  color: #ffffff;
+}
+
+.hero-section .text-slate-300 {
+  color: #cbd5e1;
+}
+
+/* Utilidades responsive adicionales */
+@media (max-width: 640px) {
+  .container {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+
+  /* Mejoras para formularios en móvil */
+  .space-y-6 > * + * {
+    margin-top: 1rem !important;
+  }
+
+  /* Botones más grandes en móvil para mejor touch target */
+  button,
+  .btn {
+    min-height: 44px;
+  }
+
+  /* Text más legible en móvil */
+  body {
+    font-size: 16px;
+    line-height: 1.5;
+  }
+}
