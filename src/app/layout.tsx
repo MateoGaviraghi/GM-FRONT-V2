@@ -16,6 +16,17 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Guzman Motors - Concesionaria Oficial",
   description: "Concesionaria de camiones, utilitarios y remolques en Santa Fe",
+  icons: {
+    icon: [
+      { url: "/images/logo/logoGM-Photoroom.png" },
+      {
+        url: "/images/logo/logoGM-Photoroom.png",
+        sizes: "32x32",
+        type: "image/png",
+      },
+    ],
+    apple: "/images/logo/logoGM-Photoroom.png",
+  },
 };
 
 export const viewport = {
