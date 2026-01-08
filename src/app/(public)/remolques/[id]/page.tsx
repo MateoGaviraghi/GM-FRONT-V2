@@ -137,7 +137,7 @@ export default function RemolqueDetailPage() {
     notFound();
   }
 
-  const anio = remolque.anio ? new Date(remolque.anio).getFullYear() : null;
+  const anio = remolque.anio || null;
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -341,7 +341,7 @@ export default function RemolqueDetailPage() {
                       Año
                     </p>
                     <p className="text-slate-900 text-xl font-bold">
-                      {new Date(remolque.anio).getFullYear()}
+                      {remolque.anio}
                     </p>
                   </div>
                 )}

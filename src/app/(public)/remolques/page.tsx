@@ -70,9 +70,7 @@ export default function RemolquesPage() {
       (remolque.capacidadCarga
         ? `• Capacidad: ${remolque.capacidadCarga}\n`
         : "") +
-      (remolque.anio
-        ? `• Año: ${new Date(remolque.anio).getFullYear()}\n`
-        : "") +
+      (remolque.anio ? `• Año: ${remolque.anio}\n` : "") +
       (remolque.cantidadEjes ? `• Ejes: ${remolque.cantidadEjes}\n` : "") +
       `\n¿Podrían brindarme más información y disponibilidad? ¡Gracias!`;
 
@@ -173,7 +171,7 @@ export default function RemolquesPage() {
     const años = remolques
       .map((r) => {
         if (r.anio) {
-          return new Date(r.anio).getFullYear().toString();
+          return r.anio.toString();
         }
         return null;
       })
@@ -201,7 +199,7 @@ export default function RemolquesPage() {
 
       let coincideAño = true;
       if (filtroAño !== "Todos" && remolque.anio) {
-        const añoRemolque = new Date(remolque.anio).getFullYear().toString();
+        const añoRemolque = remolque.anio.toString();
         coincideAño = añoRemolque === filtroAño;
       }
 
@@ -834,7 +832,7 @@ export default function RemolquesPage() {
                                   <span className="font-semibold">
                                     Año:{" "}
                                     <span className="font-bold text-white">
-                                      {new Date(remolque.anio).getFullYear()}
+                                      {remolque.anio}
                                     </span>
                                   </span>
                                 )}

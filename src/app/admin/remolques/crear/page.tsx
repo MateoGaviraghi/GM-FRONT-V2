@@ -181,7 +181,7 @@ export default function CrearRemolque() {
         categoria: formData.categoria || undefined,
         marca: formData.marca || undefined,
         modelo: formData.modelo || undefined,
-        anio: formData.anio ? new Date(`${formData.anio}-01-01`) : undefined,
+        anio: formData.anio ? parseInt(formData.anio) : undefined,
         tipoCarroceria: formData.tipoCarroceria || undefined,
         cantidadEjes: formData.cantidadEjes
           ? parseInt(formData.cantidadEjes)
@@ -217,7 +217,7 @@ export default function CrearRemolque() {
       imageFiles.forEach((f) => URL.revokeObjectURL(f.url));
       videoFiles.forEach((f) => URL.revokeObjectURL(f.url));
 
-      router.push("/dashboard/remolques?created=true");
+      router.push("/admin/remolques?created=true");
     } catch (error) {
       console.error("Error creando remolque:", error);
       setErrors({

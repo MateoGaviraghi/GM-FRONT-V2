@@ -56,7 +56,7 @@ export interface Remolque {
   categoria?: CategoriaRemolque;
   marca?: string;
   modelo?: string;
-  anio?: Date | string;
+  anio?: number;
   tipoCarroceria?: string;
   cantidadEjes?: number;
   capacidadCarga?: string;
@@ -154,7 +154,7 @@ export interface CreateRemolqueDto {
   categoria?: CategoriaRemolque;
   marca?: string;
   modelo?: string;
-  anio?: Date | string;
+  anio?: number;
   tipoCarroceria?: string;
   cantidadEjes?: number;
   capacidadCarga?: string;
@@ -182,7 +182,7 @@ export interface UpdateRemolqueDto {
   categoria?: CategoriaRemolque;
   marca?: string;
   modelo?: string;
-  anio?: Date | string;
+  anio?: number;
   tipoCarroceria?: string;
   cantidadEjes?: number;
   capacidadCarga?: string;

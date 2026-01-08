@@ -141,9 +141,7 @@ const RemolqueCard = ({ remolque }: { remolque: Remolque }) => {
           {remolque.anio && (
             <div className="flex items-center gap-2">
               <span className="text-gray-400">📅</span>
-              <span className="text-gray-600">
-                {new Date(remolque.anio).getFullYear()}
-              </span>
+              <span className="text-gray-600">{remolque.anio}</span>
             </div>
           )}
         </div>

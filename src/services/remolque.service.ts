@@ -261,11 +261,7 @@ class RemolqueService {
     // Campos simples
     Object.entries(datosRemolque).forEach(([key, value]) => {
       if (value !== undefined && value !== null) {
-        if (value instanceof Date) {
-          formData.append(key, value.toISOString());
-        } else {
-          formData.append(key, value.toString());
-        }
+        formData.append(key, value.toString());
       }
     });
 
@@ -340,16 +336,38 @@ class RemolqueService {
       formData.append("fotoSinFondo2", fotoSinFondo2);
     }
 
-    const response = await apiClient.post(
-      `${this.baseURL}/create-with-media`,
-      formData,
-      {
-        headers: {
-          "Content-Type": "multipart/form-data",
-        },
+    // DEBUG: Ver qué datos se envían
+    console.log("📦 Datos enviados al backend:");
+    for (const [key, value] of formData.entries()) {
+      if (value instanceof File) {
+        console.log(`  ${key}: [File] ${value.name} (${value.size} bytes)`);
+      } else {
+        console.log(`  ${key}: ${value}`);
       }
-    );
-    return response.data;
+    }
+
+    try {
+      const response = await apiClient.post(
+        `${this.baseURL}/create-with-media`,
+        formData,
+        {
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
+        }
+      );
+      return response.data;
+    } catch (error: unknown) {
+      const axiosError = error as {
+        response?: { data?: unknown; status?: number };
+      };
+      console.error(
+        "❌ Error del servidor:",
+        axiosError.response?.status,
+        axiosError.response?.data
+      );
+      throw error;
+    }
   }
 
   /**
