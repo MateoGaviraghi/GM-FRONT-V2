@@ -12,7 +12,6 @@ import {
 } from "lucide-react";
 
 import { Usados } from "@/types";
-import { getYearFromDate } from "@/lib/date-utils";
 
 interface UsadoShareModalProps {
   isOpen: boolean;

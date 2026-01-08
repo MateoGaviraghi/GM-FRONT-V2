@@ -490,8 +490,11 @@ export default function EditarUsados() {
 
       // Redirigir al dashboard con mensaje de éxito
       router.push("/admin/usados?updated=true");
-    } catch (err: any) {
-      console.error("❌ Error actualizando vehículo usado:", err);
+    } catch (error: unknown) {
+      const err = error as {
+        response?: { data?: { message?: string | string[]; error?: string } };
+      };
+      console.error("❌ Error actualizando vehículo usado:", error);
       console.error("📋 Respuesta del servidor:", err.response?.data);
 
       // Limpiar errores anteriores
@@ -505,7 +508,7 @@ export default function EditarUsados() {
           // Parsear errores de validación y asignarlos a campos específicos
           console.error("🔍 Errores de validación:", messages);
 
-          let generalErrors: string[] = [];
+          const generalErrors: string[] = [];
 
           messages.forEach((msg: string) => {
             // Parsear mensajes como "property marca should not be empty"
@@ -551,8 +554,8 @@ export default function EditarUsados() {
         }
       } else if (err.response?.data?.error) {
         fieldErrors.submit = err.response.data.error;
-      } else if (err.message) {
-        fieldErrors.submit = err.message;
+      } else if ((error as Error).message) {
+        fieldErrors.submit = (error as Error).message;
       } else {
         fieldErrors.submit = "Error al actualizar el vehículo usado.";
       }
@@ -836,8 +839,8 @@ export default function EditarUsados() {
                 </option>
               </select>
               <p className="text-xs text-gray-500 mt-1">
-                Solo los vehículos "Disponibles" se muestran en la página
-                pública
+                Solo los vehículos &quot;Disponibles&quot; se muestran en la
+                página pública
               </p>
             </div>
 

@@ -3,7 +3,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { usadosService } from "@/services";
 import { Usados } from "@/types";
-import { getYearFromDate } from "@/lib/date-utils";
 import {
   CarFront,
   Settings,

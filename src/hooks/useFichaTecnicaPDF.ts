@@ -25,7 +25,7 @@ interface UseFichaTecnicaPDFReturn {
 export const useFichaTecnicaPDF = (
   options: UseFichaTecnicaPDFOptions = {}
 ): UseFichaTecnicaPDFReturn => {
-  const { mode = "download", onSuccess, onError } = options;
+  const { onSuccess, onError } = options;
   const [downloading, setDownloading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 

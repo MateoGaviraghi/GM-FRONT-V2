@@ -374,22 +374,25 @@ export default function CrearUsados() {
 
       // Redirigir al dashboard con mensaje de éxito
       router.push("/admin/usados?created=true");
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const err = error as {
+        response?: { data?: { message?: string | string[]; error?: string } };
+      };
       console.error("❌ Error creando vehículo usado:", error);
-      console.error("📋 Respuesta del servidor:", error.response?.data);
+      console.error("📋 Respuesta del servidor:", err.response?.data);
 
       // Limpiar errores anteriores
       const fieldErrors: FormErrors = {};
 
       // Extraer mensajes de error
-      if (error.response?.data?.message) {
-        const messages = error.response.data.message;
+      if (err.response?.data?.message) {
+        const messages = err.response.data.message;
 
         if (Array.isArray(messages)) {
           // Parsear errores de validación y asignarlos a campos específicos
           console.error("🔍 Errores de validación:", messages);
 
-          let generalErrors: string[] = [];
+          const generalErrors: string[] = [];
 
           messages.forEach((msg: string) => {
             // Parsear mensajes como "property marca should not be empty"
@@ -433,10 +436,10 @@ export default function CrearUsados() {
           // Error simple
           fieldErrors.submit = messages;
         }
-      } else if (error.response?.data?.error) {
-        fieldErrors.submit = error.response.data.error;
-      } else if (error.message) {
-        fieldErrors.submit = error.message;
+      } else if (err.response?.data?.error) {
+        fieldErrors.submit = err.response.data.error;
+      } else if ((error as Error).message) {
+        fieldErrors.submit = (error as Error).message;
       } else {
         fieldErrors.submit = "Error al crear el vehículo usado.";
       }

@@ -4,7 +4,7 @@
  */
 
 import React from "react";
-import { Download, FileText } from "lucide-react";
+import { FileText } from "lucide-react";
 import { useFichaTecnicaPDF } from "@/hooks";
 
 interface FichaTecnicaButtonProps {
