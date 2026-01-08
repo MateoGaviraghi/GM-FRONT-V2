@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 
 import { Usados } from "@/types";
+import { getYearFromDate } from "@/lib/date-utils";
 
 interface UsadoShareModalProps {
   isOpen: boolean;
@@ -41,10 +42,11 @@ export function UsadoShareModal({
     const fullUrl = `${baseUrl}/usados/${usado._id}`;
 
     let message = `*${vehicleTitle}*\n\n`;
-    
-    if (usado.anio) message += `📅 Año: ${new Date(usado.anio).getFullYear()}\n`;
-    if (usado.kilometraje) message += `🛣️ Km: ${usado.kilometraje.toLocaleString()}\n`;
-    
+
+    if (usado.anio) message += `📅 Año: ${usado.anio}\n`;
+    if (usado.kilometraje)
+      message += `🛣️ Km: ${usado.kilometraje.toLocaleString()}\n`;
+
     message += `\nVer vehículo completo:\n`;
     message += `${fullUrl}\n\n`;
 

@@ -29,6 +29,7 @@ interface FormData {
   modelo: string;
   anio: string;
   kilometraje: string;
+  estado: string;
   version: string;
   tipoVehiculo: string;
   tipoCombustible: string;
@@ -73,6 +74,7 @@ export default function EditarUsados() {
     modelo: "",
     anio: new Date().getFullYear().toString(),
     kilometraje: "",
+    estado: "Disponible",
     version: "",
     tipoVehiculo: "",
     tipoCombustible: "",
@@ -130,10 +132,9 @@ export default function EditarUsados() {
         titulo: data.titulo || "",
         marca: data.marca || "",
         modelo: data.modelo || "",
-        anio: data.anio
-          ? new Date(data.anio).getFullYear().toString()
-          : new Date().getFullYear().toString(),
+        anio: data.anio?.toString() || new Date().getFullYear().toString(),
         kilometraje: data.kilometraje?.toString() || "",
+        estado: data.estado || "Disponible",
         version: data.version || "",
         tipoVehiculo: data.tipoVehiculo || "",
         tipoCombustible: data.tipoCombustible || "",
@@ -211,10 +212,19 @@ export default function EditarUsados() {
 
   // Manejar cambios en inputs
   const handleInputChange = (field: keyof FormData, value: string) => {
-    setFormData((prev) => ({
-      ...prev,
-      [field]: value,
-    }));
+    console.log(`[handleInputChange] Campo: ${field}, Valor: "${value}"`);
+
+    setFormData((prev) => {
+      const newData = {
+        ...prev,
+        [field]: value,
+      };
+      console.log(
+        `[handleInputChange] Nuevo formData.${field}:`,
+        newData[field]
+      );
+      return newData;
+    });
 
     // Limpiar error del campo
     if (errors[field]) {
@@ -382,45 +392,60 @@ export default function EditarUsados() {
     setSaving(true);
 
     try {
-      // Preparar FormData
+      // Preparar FormData para actualización con multimedia
       const apiFormData = new FormData();
+
+      // DEBUG: Verificar el valor del año antes de enviar
+      console.log("=== DEBUG GUARDAR USADO ===");
+      console.log(
+        "formData.anio:",
+        formData.anio,
+        "tipo:",
+        typeof formData.anio
+      );
 
       // Campos obligatorios
       apiFormData.append("marca", formData.marca);
       apiFormData.append("modelo", formData.modelo);
-      apiFormData.append("anio", `${formData.anio}-01-01`);
+      apiFormData.append("anio", formData.anio);
       apiFormData.append("kilometraje", formData.kilometraje.toString());
+      apiFormData.append("estado", formData.estado);
 
-      // Campos opcionales
-      if (formData.titulo) apiFormData.append("titulo", formData.titulo);
-      if (formData.version) apiFormData.append("version", formData.version);
-      if (formData.tipoVehiculo)
-        apiFormData.append("tipoVehiculo", formData.tipoVehiculo);
-      if (formData.tipoCombustible)
-        apiFormData.append("tipoCombustible", formData.tipoCombustible);
-      if (formData.motor) apiFormData.append("motor", formData.motor);
-      if (formData.transmision)
-        apiFormData.append("transmision", formData.transmision);
-      if (formData.traccion) apiFormData.append("traccion", formData.traccion);
-      if (formData.potencia) apiFormData.append("potencia", formData.potencia);
-      if (formData.cilindrada)
-        apiFormData.append("cilindrada", formData.cilindrada);
-      if (formData.capacidadCarga)
-        apiFormData.append("capacidadCarga", formData.capacidadCarga);
-      if (formData.sistemaFrenado)
-        apiFormData.append("sistemaFrenado", formData.sistemaFrenado);
-      if (formData.color) apiFormData.append("color", formData.color);
-      if (formData.cantidadPuertas)
+      // Campos opcionales - solo agregar si tienen valor
+      if (formData.titulo?.trim())
+        apiFormData.append("titulo", formData.titulo.trim());
+      if (formData.version?.trim())
+        apiFormData.append("version", formData.version.trim());
+      if (formData.tipoVehiculo?.trim())
+        apiFormData.append("tipoVehiculo", formData.tipoVehiculo.trim());
+      if (formData.tipoCombustible?.trim())
+        apiFormData.append("tipoCombustible", formData.tipoCombustible.trim());
+      if (formData.motor?.trim())
+        apiFormData.append("motor", formData.motor.trim());
+      if (formData.transmision?.trim())
+        apiFormData.append("transmision", formData.transmision.trim());
+      if (formData.traccion?.trim())
+        apiFormData.append("traccion", formData.traccion.trim());
+      if (formData.potencia?.trim())
+        apiFormData.append("potencia", formData.potencia.trim());
+      if (formData.cilindrada?.trim())
+        apiFormData.append("cilindrada", formData.cilindrada.trim());
+      if (formData.capacidadCarga?.trim())
+        apiFormData.append("capacidadCarga", formData.capacidadCarga.trim());
+      if (formData.sistemaFrenado?.trim())
+        apiFormData.append("sistemaFrenado", formData.sistemaFrenado.trim());
+      if (formData.color?.trim())
+        apiFormData.append("color", formData.color.trim());
+      if (formData.cantidadPuertas?.trim())
         apiFormData.append("cantidadPuertas", formData.cantidadPuertas);
-      if (formData.cantidadAsientos)
+      if (formData.cantidadAsientos?.trim())
         apiFormData.append("cantidadAsientos", formData.cantidadAsientos);
-      if (formData.descripcion)
-        apiFormData.append("descripcion", formData.descripcion);
+      if (formData.descripcion?.trim())
+        apiFormData.append("descripcion", formData.descripcion.trim());
 
-      // Agregar equipamiento como JSON si existe
-      if (equipamiento.length > 0) {
+      // Equipamiento como JSON string (el backend lo transforma a array)
+      if (equipamiento.length > 0)
         apiFormData.append("equipamiento", JSON.stringify(equipamiento));
-      }
 
       // Agregar nuevas imágenes
       newImageFiles.forEach((filePreview) => {
@@ -440,7 +465,7 @@ export default function EditarUsados() {
         apiFormData.append("fotoSinFondo2", newFotoSinFondo2);
       }
 
-      // Agregar IDs de archivos a eliminar
+      // Agregar IDs de archivos a eliminar (como JSON strings)
       if (imagesToDelete.length > 0) {
         apiFormData.append("imagenesAEliminar", JSON.stringify(imagesToDelete));
       }
@@ -454,7 +479,9 @@ export default function EditarUsados() {
         apiFormData.append("eliminarFotoSinFondo2", "true");
       }
 
-      // Actualizar vehículo usado
+      console.log("🔍 Actualizando vehículo...");
+
+      // Actualizar vehículo usado con multimedia
       await usadosService.updateUsadosWithMedia(usadosId, apiFormData);
 
       // Limpiar URLs de objetos nuevos
@@ -463,12 +490,74 @@ export default function EditarUsados() {
 
       // Redirigir al dashboard con mensaje de éxito
       router.push("/admin/usados?updated=true");
-    } catch (err) {
-      console.error("Error actualizando vehículo usado:", err);
-      setErrors({
-        submit:
-          "Error al actualizar el vehículo usado. Por favor, inténtelo nuevamente.",
-      });
+    } catch (err: any) {
+      console.error("❌ Error actualizando vehículo usado:", err);
+      console.error("📋 Respuesta del servidor:", err.response?.data);
+
+      // Limpiar errores anteriores
+      const fieldErrors: FormErrors = {};
+
+      // Extraer mensajes de error
+      if (err.response?.data?.message) {
+        const messages = err.response.data.message;
+
+        if (Array.isArray(messages)) {
+          // Parsear errores de validación y asignarlos a campos específicos
+          console.error("🔍 Errores de validación:", messages);
+
+          let generalErrors: string[] = [];
+
+          messages.forEach((msg: string) => {
+            // Parsear mensajes como "property marca should not be empty"
+            const fieldMatch = msg.match(/property (\w+) (.+)/);
+
+            if (fieldMatch) {
+              const fieldName = fieldMatch[1];
+              const errorMsg = fieldMatch[2];
+
+              // Traducir algunos mensajes comunes
+              let translatedMsg = errorMsg;
+              if (errorMsg.includes("should not be empty"))
+                translatedMsg = "Este campo es requerido";
+              else if (errorMsg.includes("must be a string"))
+                translatedMsg = "Debe ser texto";
+              else if (errorMsg.includes("must be a number"))
+                translatedMsg = "Debe ser un número";
+              else if (errorMsg.includes("must be an array"))
+                translatedMsg = "Debe ser una lista";
+
+              fieldErrors[fieldName] = translatedMsg;
+            } else {
+              generalErrors.push(msg);
+            }
+          });
+
+          // Si hay errores generales, mostrarlos también
+          if (generalErrors.length > 0) {
+            fieldErrors.submit = generalErrors.join("\n• ");
+          }
+
+          // Si solo hay errores de campo, mostrar mensaje general
+          if (
+            Object.keys(fieldErrors).length > 0 &&
+            generalErrors.length === 0
+          ) {
+            fieldErrors.submit =
+              "Por favor, corrige los errores en el formulario";
+          }
+        } else {
+          // Error simple
+          fieldErrors.submit = messages;
+        }
+      } else if (err.response?.data?.error) {
+        fieldErrors.submit = err.response.data.error;
+      } else if (err.message) {
+        fieldErrors.submit = err.message;
+      } else {
+        fieldErrors.submit = "Error al actualizar el vehículo usado.";
+      }
+
+      setErrors(fieldErrors);
     } finally {
       setSaving(false);
     }
@@ -678,12 +767,19 @@ export default function EditarUsados() {
                 Año del Modelo
               </label>
               <input
-                type="number"
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]{4}"
+                maxLength={4}
                 value={formData.anio}
-                onChange={(e) => handleInputChange("anio", e.target.value)}
+                onChange={(e) => {
+                  // Solo permitir números
+                  const value = e.target.value.replace(/\D/g, "");
+                  if (value.length <= 4) {
+                    handleInputChange("anio", value);
+                  }
+                }}
                 placeholder={new Date().getFullYear().toString()}
-                min="1990"
-                max={new Date().getFullYear() + 1}
                 className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 ${
                   errors.anio ? "border-red-300 bg-red-50" : "border-gray-300"
                 }`}
@@ -717,6 +813,32 @@ export default function EditarUsados() {
                   {errors.kilometraje}
                 </p>
               )}
+            </div>
+
+            {/* Estado del Vehículo */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Estado del Vehículo *
+              </label>
+              <select
+                value={formData.estado}
+                onChange={(e) => handleInputChange("estado", e.target.value)}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 bg-white"
+              >
+                <option value="Disponible">
+                  Disponible (Visible en página pública)
+                </option>
+                <option value="Reservado">
+                  Reservado (Oculto en página pública)
+                </option>
+                <option value="Vendido">
+                  Vendido (Oculto en página pública)
+                </option>
+              </select>
+              <p className="text-xs text-gray-500 mt-1">
+                Solo los vehículos "Disponibles" se muestran en la página
+                pública
+              </p>
             </div>
 
             {/* Versión */}

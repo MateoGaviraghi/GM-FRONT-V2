@@ -3,7 +3,13 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { ChevronLeft, ChevronRight, Mail, MessageCircle, Phone } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Mail,
+  MessageCircle,
+  Phone,
+} from "lucide-react";
 import type { Remolque, Usados } from "@/types";
 import { remolqueService, usadosService } from "@/services";
 
@@ -380,9 +386,7 @@ export function RemolquesUsadosSection() {
                                   {/* Badge superior */}
                                   <div className="flex justify-end">
                                     <div className="bg-cyan-500/90 backdrop-blur-sm text-white px-4 py-2 rounded-full text-sm font-bold shadow-lg">
-                                      {usado.anio instanceof Date
-                                        ? usado.anio.getFullYear()
-                                        : usado.anio}
+                                      {usado.anio}
                                     </div>
                                   </div>
 

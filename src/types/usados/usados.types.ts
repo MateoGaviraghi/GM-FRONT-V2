@@ -21,7 +21,7 @@ export interface Usados {
   // Campos obligatorios
   marca: string;
   modelo: string;
-  anio: Date | string;
+  anio: number;
   kilometraje: number;
 
   // Campos opcionales - Información básica
@@ -72,7 +72,7 @@ export interface CreateUsadosDto {
   // Obligatorios
   marca: string;
   modelo: string;
-  anio: Date | string;
+  anio: number;
   kilometraje: number;
 
   // Opcionales
@@ -102,7 +102,7 @@ export interface UpdateUsadosDto {
   titulo?: string;
   marca?: string;
   modelo?: string;
-  anio?: Date | string;
+  anio?: number;
   kilometraje?: number;
   version?: string;
   tipoVehiculo?: TipoVehiculo;

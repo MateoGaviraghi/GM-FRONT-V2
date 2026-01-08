@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { usadosService } from "@/services";
 import { Usados } from "@/types";
+import { getYearFromDate } from "@/lib/date-utils";
 import {
   CarFront,
   Settings,
@@ -104,7 +105,7 @@ export default function UsadosPage() {
       `• Marca: ${usado.marca}\n` +
       `• Modelo: ${usado.modelo}\n` +
       (usado.version ? `• Versión: ${usado.version}\n` : "") +
-      (usado.anio ? `• Año: ${new Date(usado.anio).getFullYear()}\n` : "") +
+      (usado.anio ? `• Año: ${usado.anio}\n` : "") +
       (usado.tipoCombustible
         ? `• Combustible: ${usado.tipoCombustible}\n`
         : "") +
@@ -172,7 +173,7 @@ export default function UsadosPage() {
     const años = usados
       .map((v) => {
         if (v.anio) {
-          return new Date(v.anio).getFullYear().toString();
+          return v.anio.toString();
         }
         return null;
       })
@@ -205,7 +206,7 @@ export default function UsadosPage() {
 
       let coincideAño = true;
       if (filtroAño !== "Todos" && usado.anio) {
-        const añoVehiculo = new Date(usado.anio).getFullYear().toString();
+        const añoVehiculo = usado.anio.toString();
         coincideAño = añoVehiculo === filtroAño;
       }
 
@@ -906,7 +907,7 @@ export default function UsadosPage() {
                                   <span className="font-semibold">
                                     Año:{" "}
                                     <span className="font-bold text-white">
-                                      {new Date(usado.anio).getFullYear()}
+                                      {usado.anio}
                                     </span>
                                   </span>
                                 )}

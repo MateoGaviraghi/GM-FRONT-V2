@@ -91,8 +91,7 @@ const UsadosCard = ({
               {usados.titulo || `${usados.marca} ${usados.modelo}`}
             </h3>
             <p className="text-sm text-gray-600">
-              {usados.marca} {usados.modelo} •{" "}
-              {usados.anio ? new Date(usados.anio).getFullYear() : "N/A"}
+              {usados.marca} {usados.modelo} • {usados.anio || "N/A"}
             </p>
           </div>
         </div>
@@ -787,9 +786,7 @@ export default function ListaUsadosAvanzada() {
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                        {usado.anio
-                          ? new Date(usado.anio).getFullYear()
-                          : "N/A"}
+                        {usado.anio || "N/A"}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
                         {formatKilometraje(usado.kilometraje)}
