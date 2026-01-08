@@ -42,7 +42,7 @@ export function ClientFooter() {
               {/* Redes sociales mejoradas */}
               <div className="flex gap-3">
                 <a
-                  href="https://facebook.com/guzmanmotors"
+                  href="https://www.facebook.com/guzmanmotors19/"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="group relative"
