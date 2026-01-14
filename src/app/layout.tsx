@@ -15,7 +15,28 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Guzman Motors - Concesionaria Oficial",
-  description: "Concesionaria de camiones, utilitarios y remolques en Santa Fe",
+  description:
+    "Concesionaria de camiones, utilitarios y remolques en Santa Fe. Venta de vehículos FOTON, remolques y usados.",
+  openGraph: {
+    title: "Guzman Motors - Concesionaria Oficial",
+    description:
+      "Concesionaria de camiones, utilitarios y remolques en Santa Fe. Venta de vehículos FOTON, remolques y usados.",
+    images: ["/images/inicio/entrada neogcio gumzan motors.webp"],
+    url: "https://www.guzmanmotors.com.ar",
+    siteName: "Guzman Motors",
+    locale: "es_AR",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Guzman Motors - Concesionaria Oficial",
+    description:
+      "Concesionaria de camiones, utilitarios y remolques en Santa Fe. Venta de vehículos FOTON, remolques y usados.",
+    images: ["/images/inicio/entrada neogcio gumzan motors.webp"],
+  },
+  icons: {
+    icon: "/images/logo/favicon-logo.png",
+  },
 };
 
 export const viewport = {
