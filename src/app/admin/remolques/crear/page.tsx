@@ -220,10 +220,11 @@ export default function CrearRemolque() {
       router.push("/admin/remolques?created=true");
     } catch (error: any) {
       console.error("Error creando remolque:", error);
-      
+
       // Extraer mensaje de error específico del backend
-      let errorMessage = "Error al crear el remolque. Por favor, inténtelo nuevamente.";
-      
+      let errorMessage =
+        "Error al crear el remolque. Por favor, inténtelo nuevamente.";
+
       if (error?.response?.data) {
         const errorData = error.response.data;
         if (errorData.message) {
@@ -233,7 +234,7 @@ export default function CrearRemolque() {
           errorMessage += "\n" + errorData.errors.join("\n");
         }
       }
-      
+
       setErrors({
         submit: errorMessage,
       });

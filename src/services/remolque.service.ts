@@ -362,13 +362,16 @@ class RemolqueService {
         response?: { data?: unknown; status?: number };
         message?: string;
       };
-      
+
       // Log detallado del error
       console.error("❌ Error completo al crear remolque:");
       console.error("  Status:", axiosError.response?.status);
-      console.error("  Data:", JSON.stringify(axiosError.response?.data, null, 2));
+      console.error(
+        "  Data:",
+        JSON.stringify(axiosError.response?.data, null, 2)
+      );
       console.error("  Message:", axiosError.message);
-      
+
       // Si hay errores de validación, mostrarlos
       if (axiosError.response?.data) {
         const errorData = axiosError.response.data as any;
@@ -379,7 +382,7 @@ class RemolqueService {
           console.error("  Errores de validación:", errorData.errors);
         }
       }
-      
+
       throw error;
     }
   }
