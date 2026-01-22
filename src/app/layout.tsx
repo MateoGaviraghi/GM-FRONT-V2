@@ -14,6 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://www.guzmanmotors.com.ar"),
   title: "Guzman Motors - Concesionaria Oficial",
   description:
     "Concesionaria de camiones, utilitarios y remolques en Santa Fe. Venta de vehículos FOTON, remolques y usados.",

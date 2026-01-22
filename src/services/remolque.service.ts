@@ -42,7 +42,7 @@ class RemolqueService {
    * Solo muestra remolques con estado "Disponible"
    */
   async getPublicRemolques(
-    params?: RemolqueSearchParams
+    params?: RemolqueSearchParams,
   ): Promise<RemolquesResponse> {
     const queryParams = new URLSearchParams();
 
@@ -55,7 +55,7 @@ class RemolqueService {
     }
 
     const response = await apiClient.get(
-      `${this.baseURL}/public?${queryParams.toString()}`
+      `${this.baseURL}/public?${queryParams.toString()}`,
     );
     return response.data;
   }
@@ -65,7 +65,7 @@ class RemolqueService {
    */
   async searchPublicRemolques(
     query: string,
-    params?: RemolqueSearchParams
+    params?: RemolqueSearchParams,
   ): Promise<RemolquesResponse> {
     const queryParams = new URLSearchParams();
 
@@ -80,7 +80,7 @@ class RemolqueService {
     }
 
     const response = await apiClient.get(
-      `${this.baseURL}/public/search?${queryParams.toString()}`
+      `${this.baseURL}/public/search?${queryParams.toString()}`,
     );
     return response.data;
   }
@@ -89,7 +89,7 @@ class RemolqueService {
    * Búsqueda pública avanzada con filtros
    */
   async searchPublicRemolquesAdvanced(
-    searchParams: RemolqueSearchParams
+    searchParams: RemolqueSearchParams,
   ): Promise<RemolqueSearchResponse> {
     const params = new URLSearchParams();
 
@@ -100,7 +100,7 @@ class RemolqueService {
     });
 
     const response = await apiClient.get(
-      `${this.baseURL}/public/search?${params.toString()}`
+      `${this.baseURL}/public/search?${params.toString()}`,
     );
 
     const backendResponse = response.data;
@@ -159,7 +159,7 @@ class RemolqueService {
   async getSuggestions(
     field: string,
     query: string,
-    limit: number = 5
+    limit: number = 5,
   ): Promise<string[]> {
     const params = new URLSearchParams({
       field,
@@ -168,7 +168,7 @@ class RemolqueService {
     });
 
     const response = await apiClient.get(
-      `${this.baseURL}/public/suggestions?${params.toString()}`
+      `${this.baseURL}/public/suggestions?${params.toString()}`,
     );
     return response.data;
   }
@@ -190,7 +190,7 @@ class RemolqueService {
    * Requiere autenticación de administrador
    */
   async getAllRemolques(
-    params?: RemolqueSearchParams
+    params?: RemolqueSearchParams,
   ): Promise<RemolquesResponse> {
     const queryParams = new URLSearchParams();
 
@@ -203,7 +203,7 @@ class RemolqueService {
     }
 
     const response = await apiClient.get(
-      `${this.baseURL}?${queryParams.toString()}`
+      `${this.baseURL}?${queryParams.toString()}`,
     );
     return response.data;
   }
@@ -212,7 +212,7 @@ class RemolqueService {
    * Búsqueda completa para administradores
    */
   async searchAllRemolques(
-    searchDto: RemolqueSearchParams
+    searchDto: RemolqueSearchParams,
   ): Promise<RemolquesResponse> {
     const response = await apiClient.post(`${this.baseURL}/search`, searchDto);
     return response.data;
@@ -239,7 +239,7 @@ class RemolqueService {
    * Maneja upload múltiple de archivos
    */
   async createRemolqueWithMedia(
-    remolqueData: RemolqueFormData
+    remolqueData: RemolqueFormData,
   ): Promise<Remolque> {
     const formData = new FormData();
 
@@ -275,7 +275,7 @@ class RemolqueService {
     if (
       dimensiones &&
       Object.keys(dimensiones).some(
-        (key) => dimensiones[key as keyof typeof dimensiones]
+        (key) => dimensiones[key as keyof typeof dimensiones],
       )
     ) {
       formData.append("dimensiones", JSON.stringify(dimensiones));
@@ -283,7 +283,7 @@ class RemolqueService {
     if (
       ejesSuspension &&
       Object.keys(ejesSuspension).some(
-        (key) => ejesSuspension[key as keyof typeof ejesSuspension]
+        (key) => ejesSuspension[key as keyof typeof ejesSuspension],
       )
     ) {
       formData.append("ejesSuspension", JSON.stringify(ejesSuspension));
@@ -291,7 +291,7 @@ class RemolqueService {
     if (
       carroceria &&
       Object.keys(carroceria).some(
-        (key) => carroceria[key as keyof typeof carroceria]
+        (key) => carroceria[key as keyof typeof carroceria],
       )
     ) {
       formData.append("carroceria", JSON.stringify(carroceria));
@@ -304,7 +304,7 @@ class RemolqueService {
     if (equipamientoOpcional && equipamientoOpcional.length > 0) {
       formData.append(
         "equipamientoOpcional",
-        JSON.stringify(equipamientoOpcional)
+        JSON.stringify(equipamientoOpcional),
       );
     }
 
@@ -354,7 +354,7 @@ class RemolqueService {
           headers: {
             "Content-Type": "multipart/form-data",
           },
-        }
+        },
       );
       return response.data;
     } catch (error: unknown) {
@@ -368,13 +368,16 @@ class RemolqueService {
       console.error("  Status:", axiosError.response?.status);
       console.error(
         "  Data:",
-        JSON.stringify(axiosError.response?.data, null, 2)
+        JSON.stringify(axiosError.response?.data, null, 2),
       );
       console.error("  Message:", axiosError.message);
 
       // Si hay errores de validación, mostrarlos
       if (axiosError.response?.data) {
-        const errorData = axiosError.response.data as any;
+        const errorData = axiosError.response.data as {
+          message?: string;
+          errors?: unknown;
+        };
         if (errorData.message) {
           console.error("  Mensaje del servidor:", errorData.message);
         }
@@ -392,7 +395,7 @@ class RemolqueService {
    */
   async updateRemolque(
     id: string,
-    updateData: UpdateRemolqueDto
+    updateData: UpdateRemolqueDto,
   ): Promise<Remolque> {
     const response = await apiClient.patch(`${this.baseURL}/${id}`, updateData);
     return response.data;
@@ -404,7 +407,7 @@ class RemolqueService {
    */
   async updateEstadoRemolque(
     id: string,
-    estado: EstadoRemolque
+    estado: EstadoRemolque,
   ): Promise<Remolque> {
     const response = await apiClient.patch(`${this.baseURL}/${id}/status`, {
       estado,
@@ -429,7 +432,7 @@ class RemolqueService {
    */
   validateFiles(
     imagenes?: File[],
-    videos?: File[]
+    videos?: File[],
   ): { valid: boolean; errors: string[] } {
     const errors: string[] = [];
 
@@ -454,7 +457,7 @@ class RemolqueService {
         ];
         if (!formatosValidos.includes(imagen.type)) {
           errors.push(
-            `Imagen ${index + 1}: Formato no válido. Use JPG, PNG o WEBP`
+            `Imagen ${index + 1}: Formato no válido. Use JPG, PNG o WEBP`,
           );
         }
       });
@@ -476,7 +479,7 @@ class RemolqueService {
         const formatosValidos = ["video/mp4", "video/mov", "video/avi"];
         if (!formatosValidos.includes(video.type)) {
           errors.push(
-            `Video ${index + 1}: Formato no válido. Use MP4, MOV o AVI`
+            `Video ${index + 1}: Formato no válido. Use MP4, MOV o AVI`,
           );
         }
       });
@@ -590,7 +593,7 @@ class RemolqueService {
       `${
         process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000/api"
       }/remolques/public/${id}/ficha-tecnica`,
-      "_blank"
+      "_blank",
     );
   }
 }

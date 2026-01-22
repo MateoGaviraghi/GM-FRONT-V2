@@ -2,7 +2,6 @@
 
 import { PrendarioCalculation, Product } from "@/types/cotizador";
 import { formatCurrency } from "@/lib/cotizador-calculations";
-import { QUOTER_CONFIG } from "@/data/cotizador-data";
 
 interface PrendarioResultProps {
   data: PrendarioCalculation;

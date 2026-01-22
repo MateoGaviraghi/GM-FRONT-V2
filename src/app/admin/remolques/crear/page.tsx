@@ -85,14 +85,14 @@ export default function CrearRemolque() {
   const [chasis, setChasis] = useState<ChasisRemolque>({});
   const [dimensiones, setDimensiones] = useState<DimensionesRemolque>({});
   const [ejesSuspension, setEjesSuspension] = useState<EjesSuspensionRemolque>(
-    {}
+    {},
   );
   const [carroceria, setCarroceria] = useState<CarroceriaRemolque>({});
 
   // Equipamiento
   const [equipamientoSerie, setEquipamientoSerie] = useState<string[]>([]);
   const [equipamientoOpcional, setEquipamientoOpcional] = useState<string[]>(
-    []
+    [],
   );
   const [newEquipSerie, setNewEquipSerie] = useState("");
   const [newEquipOpcional, setNewEquipOpcional] = useState("");
@@ -218,15 +218,18 @@ export default function CrearRemolque() {
       videoFiles.forEach((f) => URL.revokeObjectURL(f.url));
 
       router.push("/admin/remolques?created=true");
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error creando remolque:", error);
+      const axiosErr = error as {
+        response?: { data?: { message?: string; errors?: string[] } };
+      };
 
       // Extraer mensaje de error específico del backend
       let errorMessage =
         "Error al crear el remolque. Por favor, inténtelo nuevamente.";
 
-      if (error?.response?.data) {
-        const errorData = error.response.data;
+      if (axiosErr?.response?.data) {
+        const errorData = axiosErr.response.data;
         if (errorData.message) {
           errorMessage = errorData.message;
         }
@@ -909,7 +912,7 @@ export default function CrearRemolque() {
                       type="button"
                       onClick={() =>
                         setEquipamientoSerie((prev) =>
-                          prev.filter((_, i) => i !== idx)
+                          prev.filter((_, i) => i !== idx),
                         )
                       }
                       className="text-red-600 hover:text-red-700"
@@ -957,7 +960,7 @@ export default function CrearRemolque() {
                       type="button"
                       onClick={() =>
                         setEquipamientoOpcional((prev) =>
-                          prev.filter((_, i) => i !== idx)
+                          prev.filter((_, i) => i !== idx),
                         )
                       }
                       className="text-red-600 hover:text-red-700"

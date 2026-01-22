@@ -7,14 +7,12 @@ interface LeasingResultProps {
   data: LeasingCalculation;
   selectedProduct: Product;
   selectedType: { name: string; price: number };
-  dollarRate: number;
 }
 
 export function LeasingResult({
   data,
   selectedProduct,
   selectedType,
-  dollarRate,
 }: LeasingResultProps) {
   const firstCanon = data.breakdown[0].cuota;
   const lastCanon = data.breakdown[data.breakdown.length - 1].cuota;

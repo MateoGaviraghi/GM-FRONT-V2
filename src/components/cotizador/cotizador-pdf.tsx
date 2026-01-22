@@ -1,3 +1,5 @@
+/* eslint-disable jsx-a11y/alt-text */
+// Las imágenes de @react-pdf/renderer no soportan el atributo alt como HTML
 import {
   Document,
   Page,
@@ -392,7 +394,6 @@ export const LeasingPDF = ({
   data,
   selectedProduct,
   selectedType,
-  dollarRate,
 }: LeasingPDFProps) => {
   const firstCanon = data.breakdown[0].cuota;
   const lastCanon = data.breakdown[data.breakdown.length - 1].cuota;

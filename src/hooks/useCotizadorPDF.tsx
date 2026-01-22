@@ -63,20 +63,9 @@ export function useCotizadorPDF() {
       // Generar el blob del PDF
       const blob = await pdf(pdfDocument).toBlob();
 
-      // Crear un enlace de descarga
+      // Crear URL y abrir en nueva pestaña
       const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-
-      const fileName = `Cotizacion_${params.selectedFinancingProduct}_${params.selectedProduct.name.replace(/\s+/g, "_")}_${new Date().toISOString().split("T")[0]}.pdf`;
-      link.download = fileName;
-
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-
-      // Limpiar el URL
-      URL.revokeObjectURL(url);
+      window.open(url, "_blank");
 
       return true;
     } catch (error) {

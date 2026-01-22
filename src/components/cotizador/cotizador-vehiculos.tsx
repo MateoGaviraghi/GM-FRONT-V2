@@ -2,7 +2,12 @@
 
 import { useState, useRef, useEffect } from "react";
 import Image from "next/image";
-import { CotizacionState, Product } from "@/types/cotizador";
+import {
+  CotizacionState,
+  Product,
+  PrendarioCalculation,
+  LeasingCalculation,
+} from "@/types/cotizador";
 import { PRODUCTS, FIXED_COSTS } from "@/data/cotizador-data";
 import {
   calculatePrendario,
@@ -46,7 +51,9 @@ export function CotizadorVehiculos() {
   const [step3Enabled, setStep3Enabled] = useState(false);
   const [step4Enabled, setStep4Enabled] = useState(false);
   const [showResult, setShowResult] = useState(false);
-  const [resultData, setResultData] = useState<any>(null);
+  const [resultData, setResultData] = useState<
+    PrendarioCalculation | LeasingCalculation | null
+  >(null);
 
   const resultRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -71,7 +78,7 @@ export function CotizadorVehiculos() {
         },
         resultData,
       );
-    } catch (error) {
+    } catch {
       alert("Error al generar el PDF. Por favor intente nuevamente.");
     }
   };
@@ -90,7 +97,7 @@ export function CotizadorVehiculos() {
         },
         resultData,
       );
-    } catch (error) {
+    } catch {
       alert("Error al imprimir. Por favor intente nuevamente.");
     }
   };
@@ -446,17 +453,16 @@ export function CotizadorVehiculos() {
               <div className="result-content">
                 {state.selectedFinancingProduct === "Prendario" ? (
                   <PrendarioResult
-                    data={resultData}
+                    data={resultData as PrendarioCalculation}
                     selectedProduct={state.selectedProduct}
                     selectedType={state.selectedType}
                     dollarRate={state.dollarRate}
                   />
                 ) : (
                   <LeasingResult
-                    data={resultData}
+                    data={resultData as LeasingCalculation}
                     selectedProduct={state.selectedProduct}
                     selectedType={state.selectedType}
-                    dollarRate={state.dollarRate}
                   />
                 )}
               </div>
@@ -478,7 +484,7 @@ export function CotizadorVehiculos() {
                     disabled={isGenerating || isPrinting}
                     className="flex-1 max-w-xs bg-blue-600 text-white text-base font-semibold px-6 py-3 rounded-xl hover:bg-blue-700 transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {isGenerating ? "⏳ Generando..." : "📄 Descargar PDF"}
+                    {isGenerating ? "⏳ Generando..." : "📄 Abrir PDF"}
                   </button>
                   <button
                     onClick={handlePrintPDF}
