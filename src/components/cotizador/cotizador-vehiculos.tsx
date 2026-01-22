@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import Image from "next/image";
 import { CotizacionState, Product } from "@/types/cotizador";
 import { PRODUCTS, FIXED_COSTS } from "@/data/cotizador-data";
@@ -13,6 +13,25 @@ import { PrendarioResult } from "./prendario-result";
 import { LeasingResult } from "./leasing-result";
 import { useCotizadorPDF } from "@/hooks/useCotizadorPDF";
 import "@/app/cotizador-print.css";
+
+// Altura aproximada del header de la web para compensar el scroll
+const HEADER_OFFSET = 120;
+
+// Función helper para scroll suave con compensación del header
+const scrollToElement = (elementId: string) => {
+  setTimeout(() => {
+    const element = document.getElementById(elementId);
+    if (element) {
+      const elementPosition = element.getBoundingClientRect().top;
+      const offsetPosition =
+        elementPosition + window.pageYOffset - HEADER_OFFSET;
+      window.scrollTo({
+        top: offsetPosition,
+        behavior: "smooth",
+      });
+    }
+  }, 300);
+};
 
 export function CotizadorVehiculos() {
   const [state, setState] = useState<CotizacionState>({
@@ -30,7 +49,13 @@ export function CotizadorVehiculos() {
   const [resultData, setResultData] = useState<any>(null);
 
   const resultRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const { generatePDF, printPDF, isGenerating, isPrinting } = useCotizadorPDF();
+
+  // Scroll al inicio cuando se carga la página
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, []);
 
   // Función para generar PDF
   const handleGeneratePDF = async () => {
@@ -96,6 +121,8 @@ export function CotizadorVehiculos() {
     setStep3Enabled(false);
     setStep4Enabled(false);
     setShowResult(false);
+    // Scroll a la sección de seleccionar tipo
+    scrollToElement("select-type-section");
   };
 
   // Paso 2: Seleccionar tipo
@@ -113,12 +140,7 @@ export function CotizadorVehiculos() {
   // Paso 2: Confirmar costos fijos
   const confirmFixedCosts = () => {
     setStep3Enabled(true);
-    setTimeout(() => {
-      document.getElementById("step3")?.scrollIntoView({
-        behavior: "smooth",
-        block: "nearest",
-      });
-    }, 300);
+    scrollToElement("step3");
   };
 
   // Paso 3: Confirmar dólar
@@ -128,12 +150,7 @@ export function CotizadorVehiculos() {
       return;
     }
     setStep4Enabled(true);
-    setTimeout(() => {
-      document.getElementById("step4")?.scrollIntoView({
-        behavior: "smooth",
-        block: "nearest",
-      });
-    }, 300);
+    scrollToElement("step4");
   };
 
   // Paso 4: Seleccionar producto financiero y calcular
@@ -160,12 +177,7 @@ export function CotizadorVehiculos() {
     setResultData(data);
     setShowResult(true);
 
-    setTimeout(() => {
-      resultRef.current?.scrollIntoView({
-        behavior: "smooth",
-        block: "nearest",
-      });
-    }, 100);
+    scrollToElement("result-section");
   };
 
   const filteredProducts = state.selectedProvider
@@ -173,9 +185,12 @@ export function CotizadorVehiculos() {
     : [];
 
   return (
-    <div className="max-w-4xl mx-auto min-h-screen bg-white shadow-2xl pb-20">
-      {/* Header */}
-      <div className="bg-slate-900 text-white p-6 text-center sticky top-0 z-50 shadow-md">
+    <div
+      ref={containerRef}
+      className="max-w-4xl mx-auto min-h-screen bg-white shadow-2xl pb-20"
+    >
+      {/* Header del Cotizador */}
+      <div className="bg-slate-900 text-white p-6 text-center shadow-md">
         <h1 className="font-heading text-2xl font-bold tracking-wide uppercase">
           GUZMAN MOTORS
         </h1>
@@ -267,7 +282,7 @@ export function CotizadorVehiculos() {
           </div>
 
           {state.selectedProduct && (
-            <div className="mt-5">
+            <div id="select-type-section" className="mt-5">
               <h3 className="font-semibold mb-2.5">Seleccione el Tipo:</h3>
               <select
                 onChange={(e) => selectType(e.target.value)}
@@ -414,6 +429,7 @@ export function CotizadorVehiculos() {
           state.selectedProduct &&
           state.selectedType && (
             <div
+              id="result-section"
               ref={resultRef}
               className="bg-white rounded-2xl shadow-2xl overflow-hidden border border-slate-200 animate-slideUp"
             >
