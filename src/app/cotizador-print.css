@@ -1,0 +1,107 @@
+/* Estilos para impresión del cotizador */
+
+/* Ocultar header y footer en pantalla */
+@media screen {
+  .print-header,
+  .print-footer {
+    display: none !important;
+  }
+}
+
+/* Estilos de impresión */
+@media print {
+  @page {
+    margin: 0;
+    size: A4;
+  }
+
+  body {
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Ocultar elementos innecesarios */
+  button,
+  #step1,
+  #step2,
+  #step3,
+  #step4,
+  .bg-slate-900.sticky,
+  nav,
+  footer:not(.print-footer) {
+    display: none !important;
+  }
+
+  /* Mostrar header y footer */
+  .print-header,
+  .print-footer {
+    display: block !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    page-break-inside: avoid !important;
+  }
+
+  .print-header {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+  }
+
+  .print-footer {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+  }
+
+  .print-header img,
+  .print-footer img {
+    width: 100% !important;
+    max-width: 100% !important;
+    height: auto !important;
+    display: block !important;
+    margin: 0 !important;
+  }
+
+  /* Ajustar contenedor principal */
+  .max-w-4xl {
+    max-width: none !important;
+    box-shadow: none !important;
+    margin: 0 !important;
+    border-radius: 0 !important;
+  }
+
+  /* Ajustar contenido del resultado */
+  .result-content {
+    padding: 150px 30px 100px !important;
+    margin: 0 !important;
+  }
+
+  /* Evitar cortes de contenido */
+  .bg-white.rounded-2xl {
+    page-break-inside: avoid !important;
+  }
+
+  table,
+  .table {
+    page-break-inside: auto !important;
+  }
+
+  tr,
+  .table-row {
+    page-break-inside: avoid !important;
+    page-break-after: auto !important;
+  }
+
+  /* Secciones importantes no deben cortarse */
+  h1,
+  h2,
+  h3,
+  .font-heading {
+    page-break-after: avoid !important;
+  }
+}
