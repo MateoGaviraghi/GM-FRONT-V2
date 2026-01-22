@@ -18,7 +18,8 @@ import { formatCurrency } from "@/lib/cotizador-calculations";
 // Estilos para el PDF
 const styles = StyleSheet.create({
   page: {
-    padding: 0,
+    padding: 15,
+    paddingBottom: 20,
     fontFamily: "Helvetica",
     fontSize: 10,
     lineHeight: 1.4,
@@ -29,22 +30,22 @@ const styles = StyleSheet.create({
   },
   headerImage: {
     width: "100%",
-    marginBottom: 15,
+    marginBottom: 10,
   },
   footerImage: {
     width: "100%",
     marginTop: "auto",
   },
   content: {
-    paddingHorizontal: 35,
+    paddingHorizontal: 20,
     paddingTop: 0,
-    paddingBottom: 15,
+    paddingBottom: 10,
     flexGrow: 1,
   },
   contentCompact: {
-    paddingHorizontal: 35,
+    paddingHorizontal: 20,
     paddingTop: 0,
-    paddingBottom: 10,
+    paddingBottom: 5,
     flexGrow: 1,
   },
   header: {
@@ -216,8 +217,8 @@ export const PrendarioPDF = ({
   const firstQuota = data.breakdown[0].cuota;
   const lastQuota = data.breakdown[data.breakdown.length - 1].cuota;
 
-  // Optimizado para A4 con header/footer y filas compactas
-  const ROWS_PER_PAGE = 36;
+  // Optimizado para A4 con header/footer - reducido para área imprimible del navegador
+  const ROWS_PER_PAGE = 28;
 
   // Crear chunks para las páginas de tabla (todas las filas)
   const additionalPages = [];
@@ -398,8 +399,8 @@ export const LeasingPDF = ({
   const firstCanon = data.breakdown[0].cuota;
   const lastCanon = data.breakdown[data.breakdown.length - 1].cuota;
 
-  // Optimizado para A4 con header/footer y filas compactas
-  const ROWS_PER_PAGE = 36;
+  // Optimizado para A4 con header/footer - reducido para área imprimible del navegador
+  const ROWS_PER_PAGE = 28;
 
   // Crear chunks para las páginas de tabla (todas las filas)
   const additionalPages = [];
