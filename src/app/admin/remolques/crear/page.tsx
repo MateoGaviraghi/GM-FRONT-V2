@@ -85,14 +85,14 @@ export default function CrearRemolque() {
   const [chasis, setChasis] = useState<ChasisRemolque>({});
   const [dimensiones, setDimensiones] = useState<DimensionesRemolque>({});
   const [ejesSuspension, setEjesSuspension] = useState<EjesSuspensionRemolque>(
-    {}
+    {},
   );
   const [carroceria, setCarroceria] = useState<CarroceriaRemolque>({});
 
   // Equipamiento
   const [equipamientoSerie, setEquipamientoSerie] = useState<string[]>([]);
   const [equipamientoOpcional, setEquipamientoOpcional] = useState<string[]>(
-    []
+    [],
   );
   const [newEquipSerie, setNewEquipSerie] = useState("");
   const [newEquipOpcional, setNewEquipOpcional] = useState("");
@@ -181,7 +181,7 @@ export default function CrearRemolque() {
         categoria: formData.categoria || undefined,
         marca: formData.marca || undefined,
         modelo: formData.modelo || undefined,
-        anio: formData.anio ? new Date(`${formData.anio}-01-01`) : undefined,
+        anio: formData.anio ? parseInt(formData.anio) : undefined,
         tipoCarroceria: formData.tipoCarroceria || undefined,
         cantidadEjes: formData.cantidadEjes
           ? parseInt(formData.cantidadEjes)
@@ -217,11 +217,29 @@ export default function CrearRemolque() {
       imageFiles.forEach((f) => URL.revokeObjectURL(f.url));
       videoFiles.forEach((f) => URL.revokeObjectURL(f.url));
 
-      router.push("/dashboard/remolques?created=true");
-    } catch (error) {
+      router.push("/admin/remolques?created=true");
+    } catch (error: unknown) {
       console.error("Error creando remolque:", error);
+      const axiosErr = error as {
+        response?: { data?: { message?: string; errors?: string[] } };
+      };
+
+      // Extraer mensaje de error específico del backend
+      let errorMessage =
+        "Error al crear el remolque. Por favor, inténtelo nuevamente.";
+
+      if (axiosErr?.response?.data) {
+        const errorData = axiosErr.response.data;
+        if (errorData.message) {
+          errorMessage = errorData.message;
+        }
+        if (errorData.errors && Array.isArray(errorData.errors)) {
+          errorMessage += "\n" + errorData.errors.join("\n");
+        }
+      }
+
       setErrors({
-        submit: "Error al crear el remolque. Por favor, inténtelo nuevamente.",
+        submit: errorMessage,
       });
     } finally {
       setLoading(false);
@@ -894,7 +912,7 @@ export default function CrearRemolque() {
                       type="button"
                       onClick={() =>
                         setEquipamientoSerie((prev) =>
-                          prev.filter((_, i) => i !== idx)
+                          prev.filter((_, i) => i !== idx),
                         )
                       }
                       className="text-red-600 hover:text-red-700"
@@ -942,7 +960,7 @@ export default function CrearRemolque() {
                       type="button"
                       onClick={() =>
                         setEquipamientoOpcional((prev) =>
-                          prev.filter((_, i) => i !== idx)
+                          prev.filter((_, i) => i !== idx),
                         )
                       }
                       className="text-red-600 hover:text-red-700"

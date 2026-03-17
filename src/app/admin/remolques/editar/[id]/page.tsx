@@ -110,9 +110,7 @@ export default function EditarRemolque() {
         categoria: data.categoria || "",
         marca: data.marca || "",
         modelo: data.modelo || "",
-        anio: data.anio
-          ? new Date(data.anio).getFullYear().toString()
-          : new Date().getFullYear().toString(),
+        anio: data.anio?.toString() || new Date().getFullYear().toString(),
         tipoCarroceria: data.tipoCarroceria || "",
         cantidadEjes: data.cantidadEjes?.toString() || "",
         capacidadCarga: data.capacidadCarga || "",
@@ -211,9 +209,7 @@ export default function EditarRemolque() {
         categoria: formData.categoria || undefined,
         marca: formData.marca || undefined,
         modelo: formData.modelo || undefined,
-        anio: formData.anio
-          ? new Date(`${formData.anio}-06-15T12:00:00.000Z`)
-          : undefined,
+        anio: formData.anio ? parseInt(formData.anio) : undefined,
         tipoCarroceria: formData.tipoCarroceria || undefined,
         cantidadEjes: formData.cantidadEjes
           ? parseInt(formData.cantidadEjes)

@@ -4,6 +4,7 @@ export { useFileDownload } from "./useFileDownload";
 export { useVehicleValidation } from "./useVehicleValidation";
 export { useFileUpload } from "./useFileUpload";
 export { useNovedadOptions } from "./useNovedadOptions";
+export { useFichaTecnicaPDF } from "./useFichaTecnicaPDF";
 export {
   useRemolqueOptions,
   useModelosByMarca,

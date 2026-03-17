@@ -33,14 +33,27 @@ export default function RemolqueDetailPage() {
 
   // Detectar sección activa con Intersection Observer
   useEffect(() => {
-    const sections = [
-      "general",
-      "chasis",
-      "dimensiones",
-      "ejes",
-      "carroceria",
-      "contacto",
-    ];
+    if (!remolque) return;
+
+    // Construir array de secciones basado en los datos disponibles
+    const sections = ["general"];
+    if (remolque.chasis?.tipo || remolque.chasis?.pisoChapaEspesor)
+      sections.push("chasis");
+    if (
+      remolque.dimensiones?.largoInterior ||
+      remolque.dimensiones?.anchoExterior ||
+      remolque.dimensiones?.alturaBaranda
+    )
+      sections.push("dimensiones");
+    if (
+      remolque.ejesSuspension?.tipoEjes ||
+      remolque.ejesSuspension?.suspension ||
+      remolque.ejesSuspension?.frenos
+    )
+      sections.push("ejes");
+    if (remolque.carroceria?.tipo || remolque.carroceria?.material)
+      sections.push("carroceria");
+    sections.push("contacto");
 
     const observer = new IntersectionObserver(
       (entries) => {
@@ -62,7 +75,7 @@ export default function RemolqueDetailPage() {
     });
 
     return () => observer.disconnect();
-  }, [loading]);
+  }, [remolque]);
 
   const scrollToSection = (sectionId: string) => {
     const element = document.getElementById(sectionId);
@@ -137,7 +150,31 @@ export default function RemolqueDetailPage() {
     notFound();
   }
 
-  const anio = remolque.anio ? new Date(remolque.anio).getFullYear() : null;
+  const anio = remolque.anio || null;
+
+  // Verificar qué secciones tienen datos
+  const hasChasisData =
+    remolque.chasis?.tipo || remolque.chasis?.pisoChapaEspesor;
+  const hasDimensionesData =
+    remolque.dimensiones?.largoInterior ||
+    remolque.dimensiones?.anchoExterior ||
+    remolque.dimensiones?.alturaBaranda;
+  const hasEjesData =
+    remolque.ejesSuspension?.tipoEjes ||
+    remolque.ejesSuspension?.suspension ||
+    remolque.ejesSuspension?.frenos;
+  const hasCarroceriaData =
+    remolque.carroceria?.tipo || remolque.carroceria?.material;
+
+  // Construir array de pestañas dinámico
+  const tabs = [
+    { id: "general", label: "GENERAL", visible: true },
+    { id: "chasis", label: "CHASIS", visible: hasChasisData },
+    { id: "dimensiones", label: "DIMENSIONES", visible: hasDimensionesData },
+    { id: "ejes", label: "EJES Y SUSPENSIÓN", visible: hasEjesData },
+    { id: "carroceria", label: "CARROCERÍA", visible: hasCarroceriaData },
+    { id: "contacto", label: "CONTACTO", visible: true },
+  ].filter((tab) => tab.visible);
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -264,14 +301,7 @@ export default function RemolqueDetailPage() {
             className="flex items-center justify-start md:justify-center gap-2 md:gap-3 py-3 md:py-4 px-4 md:max-w-7xl md:mx-auto"
             style={{ minWidth: "max-content" }}
           >
-            {[
-              { id: "general", label: "GENERAL" },
-              { id: "chasis", label: "CHASIS" },
-              { id: "dimensiones", label: "DIMENSIONES" },
-              { id: "ejes", label: "EJES Y SUSPENSIÓN" },
-              { id: "carroceria", label: "CARROCERÍA" },
-              { id: "contacto", label: "CONTACTO" },
-            ].map((tab) => (
+            {tabs.map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => scrollToSection(tab.id)}
@@ -341,7 +371,7 @@ export default function RemolqueDetailPage() {
                       Año
                     </p>
                     <p className="text-slate-900 text-xl font-bold">
-                      {new Date(remolque.anio).getFullYear()}
+                      {remolque.anio}
                     </p>
                   </div>
                 )}
@@ -362,185 +392,197 @@ export default function RemolqueDetailPage() {
       </section>
 
       {/* Sección CHASIS (Dark) */}
-      <section
-        id="chasis"
-        className="py-16 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 scroll-mt-[140px]"
-      >
-        <div className="container mx-auto px-4">
-          <div className="text-center mb-16">
-            <h2 className="text-4xl md:text-5xl font-black text-white mb-4">
-              CHASIS Y ESTRUCTURA
-            </h2>
-            <div className="w-20 h-1 bg-cyan-500 mx-auto"></div>
-          </div>
+      {(remolque.chasis?.tipo || remolque.chasis?.pisoChapaEspesor) && (
+        <section
+          id="chasis"
+          className="py-16 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 scroll-mt-[140px]"
+        >
+          <div className="container mx-auto px-4">
+            <div className="text-center mb-16">
+              <h2 className="text-4xl md:text-5xl font-black text-white mb-4">
+                CHASIS Y ESTRUCTURA
+              </h2>
+              <div className="w-20 h-1 bg-cyan-500 mx-auto"></div>
+            </div>
 
-          <div className="max-w-4xl mx-auto">
-            <div className="grid md:grid-cols-2 gap-6">
-              {remolque.chasis?.tipo && (
-                <div className="bg-white/5 backdrop-blur-sm p-8 rounded-2xl border border-white/10 hover:bg-white/10 transition-colors">
-                  <div className="w-12 h-12 bg-cyan-500/20 rounded-xl flex items-center justify-center mb-4">
-                    <Settings className="w-6 h-6 text-cyan-400" />
+            <div className="max-w-4xl mx-auto">
+              <div className="grid md:grid-cols-2 gap-6">
+                {remolque.chasis?.tipo && (
+                  <div className="bg-white/5 backdrop-blur-sm p-8 rounded-2xl border border-white/10 hover:bg-white/10 transition-colors">
+                    <div className="w-12 h-12 bg-cyan-500/20 rounded-xl flex items-center justify-center mb-4">
+                      <Settings className="w-6 h-6 text-cyan-400" />
+                    </div>
+                    <h3 className="text-white text-xl font-bold mb-2">
+                      Tipo de Chasis
+                    </h3>
+                    <p className="text-slate-300 text-lg">
+                      {remolque.chasis.tipo}
+                    </p>
                   </div>
-                  <h3 className="text-white text-xl font-bold mb-2">
-                    Tipo de Chasis
-                  </h3>
-                  <p className="text-slate-300 text-lg">
-                    {remolque.chasis.tipo}
+                )}
+                {remolque.chasis?.pisoChapaEspesor && (
+                  <div className="bg-white/5 backdrop-blur-sm p-8 rounded-2xl border border-white/10 hover:bg-white/10 transition-colors">
+                    <div className="w-12 h-12 bg-cyan-500/20 rounded-xl flex items-center justify-center mb-4">
+                      <Settings className="w-6 h-6 text-cyan-400" />
+                    </div>
+                    <h3 className="text-white text-xl font-bold mb-2">
+                      Espesor Piso
+                    </h3>
+                    <p className="text-slate-300 text-lg">
+                      {remolque.chasis.pisoChapaEspesor}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* Sección DIMENSIONES (Light) */}
+      {(remolque.dimensiones?.largoInterior ||
+        remolque.dimensiones?.anchoExterior ||
+        remolque.dimensiones?.alturaBaranda) && (
+        <section id="dimensiones" className="py-16 bg-white scroll-mt-[140px]">
+          <div className="container mx-auto px-4">
+            <div className="text-center mb-16">
+              <h2 className="text-4xl md:text-5xl font-black text-slate-900 mb-4">
+                DIMENSIONES
+              </h2>
+              <div className="w-20 h-1 bg-cyan-500 mx-auto"></div>
+            </div>
+
+            <div className="max-w-5xl mx-auto grid md:grid-cols-3 gap-8">
+              {remolque.dimensiones?.largoInterior && (
+                <div className="text-center p-8 rounded-2xl bg-slate-50 border border-slate-100">
+                  <div className="w-16 h-16 bg-cyan-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <Ruler className="w-8 h-8 text-cyan-600" />
+                  </div>
+                  <div className="text-3xl font-black text-slate-900 mb-2">
+                    {remolque.dimensiones.largoInterior}
+                  </div>
+                  <p className="text-slate-600 font-bold uppercase tracking-wider">
+                    Largo Interior
                   </p>
                 </div>
               )}
-              {remolque.chasis?.pisoChapaEspesor && (
-                <div className="bg-white/5 backdrop-blur-sm p-8 rounded-2xl border border-white/10 hover:bg-white/10 transition-colors">
-                  <div className="w-12 h-12 bg-cyan-500/20 rounded-xl flex items-center justify-center mb-4">
-                    <Settings className="w-6 h-6 text-cyan-400" />
+              {remolque.dimensiones?.anchoExterior && (
+                <div className="text-center p-8 rounded-2xl bg-slate-50 border border-slate-100">
+                  <div className="w-16 h-16 bg-cyan-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <Ruler className="w-8 h-8 text-cyan-600 transform rotate-90" />
                   </div>
-                  <h3 className="text-white text-xl font-bold mb-2">
-                    Espesor Piso
-                  </h3>
-                  <p className="text-slate-300 text-lg">
-                    {remolque.chasis.pisoChapaEspesor}
+                  <div className="text-3xl font-black text-slate-900 mb-2">
+                    {remolque.dimensiones.anchoExterior}
+                  </div>
+                  <p className="text-slate-600 font-bold uppercase tracking-wider">
+                    Ancho Exterior
+                  </p>
+                </div>
+              )}
+              {remolque.dimensiones?.alturaBaranda && (
+                <div className="text-center p-8 rounded-2xl bg-slate-50 border border-slate-100">
+                  <div className="w-16 h-16 bg-cyan-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <Ruler className="w-8 h-8 text-cyan-600" />
+                  </div>
+                  <div className="text-3xl font-black text-slate-900 mb-2">
+                    {remolque.dimensiones.alturaBaranda}
+                  </div>
+                  <p className="text-slate-600 font-bold uppercase tracking-wider">
+                    Altura Baranda
                   </p>
                 </div>
               )}
             </div>
           </div>
-        </div>
-      </section>
-
-      {/* Sección DIMENSIONES (Light) */}
-      <section id="dimensiones" className="py-16 bg-white scroll-mt-[140px]">
-        <div className="container mx-auto px-4">
-          <div className="text-center mb-16">
-            <h2 className="text-4xl md:text-5xl font-black text-slate-900 mb-4">
-              DIMENSIONES
-            </h2>
-            <div className="w-20 h-1 bg-cyan-500 mx-auto"></div>
-          </div>
-
-          <div className="max-w-5xl mx-auto grid md:grid-cols-3 gap-8">
-            {remolque.dimensiones?.largoInterior && (
-              <div className="text-center p-8 rounded-2xl bg-slate-50 border border-slate-100">
-                <div className="w-16 h-16 bg-cyan-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Ruler className="w-8 h-8 text-cyan-600" />
-                </div>
-                <div className="text-3xl font-black text-slate-900 mb-2">
-                  {remolque.dimensiones.largoInterior}
-                </div>
-                <p className="text-slate-600 font-bold uppercase tracking-wider">
-                  Largo Interior
-                </p>
-              </div>
-            )}
-            {remolque.dimensiones?.anchoExterior && (
-              <div className="text-center p-8 rounded-2xl bg-slate-50 border border-slate-100">
-                <div className="w-16 h-16 bg-cyan-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Ruler className="w-8 h-8 text-cyan-600 transform rotate-90" />
-                </div>
-                <div className="text-3xl font-black text-slate-900 mb-2">
-                  {remolque.dimensiones.anchoExterior}
-                </div>
-                <p className="text-slate-600 font-bold uppercase tracking-wider">
-                  Ancho Exterior
-                </p>
-              </div>
-            )}
-            {remolque.dimensiones?.alturaBaranda && (
-              <div className="text-center p-8 rounded-2xl bg-slate-50 border border-slate-100">
-                <div className="w-16 h-16 bg-cyan-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Ruler className="w-8 h-8 text-cyan-600" />
-                </div>
-                <div className="text-3xl font-black text-slate-900 mb-2">
-                  {remolque.dimensiones.alturaBaranda}
-                </div>
-                <p className="text-slate-600 font-bold uppercase tracking-wider">
-                  Altura Baranda
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       {/* Sección EJES (Dark) */}
-      <section
-        id="ejes"
-        className="py-16 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 scroll-mt-[140px]"
-      >
-        <div className="container mx-auto px-4">
-          <div className="text-center mb-16">
-            <h2 className="text-4xl md:text-5xl font-black text-white mb-4">
-              EJES Y SUSPENSIÓN
-            </h2>
-            <div className="w-20 h-1 bg-cyan-500 mx-auto"></div>
-          </div>
+      {(remolque.ejesSuspension?.tipoEjes ||
+        remolque.ejesSuspension?.suspension ||
+        remolque.ejesSuspension?.frenos) && (
+        <section
+          id="ejes"
+          className="py-16 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 scroll-mt-[140px]"
+        >
+          <div className="container mx-auto px-4">
+            <div className="text-center mb-16">
+              <h2 className="text-4xl md:text-5xl font-black text-white mb-4">
+                EJES Y SUSPENSIÓN
+              </h2>
+              <div className="w-20 h-1 bg-cyan-500 mx-auto"></div>
+            </div>
 
-          <div className="max-w-4xl mx-auto space-y-8">
-            {remolque.ejesSuspension?.tipoEjes && (
-              <div className="bg-white/5 backdrop-blur-sm p-8 rounded-2xl border border-white/10">
-                <h3 className="text-white text-xl font-bold mb-2">
-                  Tipo de Ejes
-                </h3>
-                <p className="text-slate-300 text-lg">
-                  {remolque.ejesSuspension.tipoEjes}
-                </p>
-              </div>
-            )}
-            {remolque.ejesSuspension?.suspension && (
-              <div className="bg-white/5 backdrop-blur-sm p-8 rounded-2xl border border-white/10">
-                <h3 className="text-white text-xl font-bold mb-2">
-                  Suspensión
-                </h3>
-                <p className="text-slate-300 text-lg">
-                  {remolque.ejesSuspension.suspension}
-                </p>
-              </div>
-            )}
-            {remolque.ejesSuspension?.frenos && (
-              <div className="bg-white/5 backdrop-blur-sm p-8 rounded-2xl border border-white/10">
-                <h3 className="text-white text-xl font-bold mb-2">Frenos</h3>
-                <p className="text-slate-300 text-lg">
-                  {remolque.ejesSuspension.frenos}
-                </p>
-              </div>
-            )}
+            <div className="max-w-4xl mx-auto space-y-8">
+              {remolque.ejesSuspension?.tipoEjes && (
+                <div className="bg-white/5 backdrop-blur-sm p-8 rounded-2xl border border-white/10">
+                  <h3 className="text-white text-xl font-bold mb-2">
+                    Tipo de Ejes
+                  </h3>
+                  <p className="text-slate-300 text-lg">
+                    {remolque.ejesSuspension.tipoEjes}
+                  </p>
+                </div>
+              )}
+              {remolque.ejesSuspension?.suspension && (
+                <div className="bg-white/5 backdrop-blur-sm p-8 rounded-2xl border border-white/10">
+                  <h3 className="text-white text-xl font-bold mb-2">
+                    Suspensión
+                  </h3>
+                  <p className="text-slate-300 text-lg">
+                    {remolque.ejesSuspension.suspension}
+                  </p>
+                </div>
+              )}
+              {remolque.ejesSuspension?.frenos && (
+                <div className="bg-white/5 backdrop-blur-sm p-8 rounded-2xl border border-white/10">
+                  <h3 className="text-white text-xl font-bold mb-2">Frenos</h3>
+                  <p className="text-slate-300 text-lg">
+                    {remolque.ejesSuspension.frenos}
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       {/* Sección CARROCERÍA (Light) */}
-      <section id="carroceria" className="py-16 bg-white scroll-mt-[140px]">
-        <div className="container mx-auto px-4">
-          <div className="text-center mb-16">
-            <h2 className="text-4xl md:text-5xl font-black text-slate-900 mb-4">
-              CARROCERÍA
-            </h2>
-            <div className="w-20 h-1 bg-cyan-500 mx-auto"></div>
-          </div>
+      {(remolque.carroceria?.tipo || remolque.carroceria?.material) && (
+        <section id="carroceria" className="py-16 bg-white scroll-mt-[140px]">
+          <div className="container mx-auto px-4">
+            <div className="text-center mb-16">
+              <h2 className="text-4xl md:text-5xl font-black text-slate-900 mb-4">
+                CARROCERÍA
+              </h2>
+              <div className="w-20 h-1 bg-cyan-500 mx-auto"></div>
+            </div>
 
-          <div className="max-w-4xl mx-auto space-y-8">
-            {remolque.carroceria?.tipo && (
-              <div className="bg-slate-50 p-8 rounded-2xl border border-slate-100">
-                <h3 className="text-slate-900 text-xl font-bold mb-2">
-                  Tipo de Carrocería
-                </h3>
-                <p className="text-slate-600 text-lg">
-                  {remolque.carroceria.tipo}
-                </p>
-              </div>
-            )}
-            {remolque.carroceria?.material && (
-              <div className="bg-slate-50 p-8 rounded-2xl border border-slate-100">
-                <h3 className="text-slate-900 text-xl font-bold mb-2">
-                  Material
-                </h3>
-                <p className="text-slate-600 text-lg">
-                  {remolque.carroceria.material}
-                </p>
-              </div>
-            )}
+            <div className="max-w-4xl mx-auto space-y-8">
+              {remolque.carroceria?.tipo && (
+                <div className="bg-slate-50 p-8 rounded-2xl border border-slate-100">
+                  <h3 className="text-slate-900 text-xl font-bold mb-2">
+                    Tipo de Carrocería
+                  </h3>
+                  <p className="text-slate-600 text-lg">
+                    {remolque.carroceria.tipo}
+                  </p>
+                </div>
+              )}
+              {remolque.carroceria?.material && (
+                <div className="bg-slate-50 p-8 rounded-2xl border border-slate-100">
+                  <h3 className="text-slate-900 text-xl font-bold mb-2">
+                    Material
+                  </h3>
+                  <p className="text-slate-600 text-lg">
+                    {remolque.carroceria.material}
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       {/* Sección CONTACTO (Dark) */}
       <section id="contacto" className="py-16 bg-slate-950 scroll-mt-[140px]">

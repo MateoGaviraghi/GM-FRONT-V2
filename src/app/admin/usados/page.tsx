@@ -365,9 +365,7 @@ export default function UsadosDashboard() {
                       </h4>
                       <p className="text-sm text-gray-600">
                         {usado.marca} • {usado.tipoVehiculo || "N/A"} •{" "}
-                        {usado.anio
-                          ? new Date(usado.anio).getFullYear()
-                          : "N/A"}
+                        {usado.anio || "N/A"}
                       </p>
                     </div>
 

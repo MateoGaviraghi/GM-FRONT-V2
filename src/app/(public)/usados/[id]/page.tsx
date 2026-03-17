@@ -4,8 +4,10 @@ import React, { useState, useEffect } from "react";
 import { notFound, useParams } from "next/navigation";
 import { Usados } from "@/types";
 import { usadosService } from "@/services";
+import { useFichaTecnicaPDF } from "@/hooks";
 import { MediaGallery } from "@/components/media-gallery";
 import { UsadoShareModal } from "@/components";
+import { debugUsadoData, debugPDFRequest } from "@/lib/debug-usado";
 import {
   ChevronLeft,
   Share2,
@@ -30,6 +32,19 @@ export default function VehiculoDetailPage() {
   const [usadosRelacionados, setUsadosRelacionados] = useState<Usados[]>([]);
   const [activeSection, setActiveSection] = useState<string>("general");
   const [shareModalOpen, setShareModalOpen] = useState(false);
+
+  // Hook para manejar descarga de PDF
+  const { downloading: downloadingPDF, openInNewTab } = useFichaTecnicaPDF({
+    onSuccess: () => {
+      console.log("PDF descargado exitosamente");
+    },
+    onError: (error) => {
+      console.error("Error al descargar PDF:", error);
+      alert(
+        "Error al descargar la ficha técnica. Por favor, intente nuevamente."
+      );
+    },
+  });
 
   // Detectar sección activa con Intersection Observer
   useEffect(() => {
@@ -75,6 +90,18 @@ export default function VehiculoDetailPage() {
         behavior: "smooth",
       });
     }
+  };
+
+  // Función para descargar/abrir la ficha técnica en PDF
+  const descargarFichaTecnica = () => {
+    if (!usado?._id) return;
+
+    // Debug: Mostrar info del vehículo
+    debugUsadoData(usado);
+    debugPDFRequest(usado._id);
+
+    // Abre el PDF en una nueva pestaña (opción más simple y recomendada)
+    openInNewTab(usado._id);
   };
 
   useEffect(() => {
@@ -140,7 +167,7 @@ export default function VehiculoDetailPage() {
     notFound();
   }
 
-  const anio = usado.anio ? new Date(usado.anio).getFullYear() : null;
+  const anio = usado.anio || null;
   const vehicleTitle =
     usado.titulo ||
     `${usado.marca} ${usado.modelo}${usado.version ? ` ${usado.version}` : ""}`;
@@ -194,11 +221,19 @@ export default function VehiculoDetailPage() {
               {/* Botones */}
               <div className="flex flex-col sm:flex-row gap-3 md:gap-4 pt-4">
                 <button
-                  onClick={() => scrollToSection("general")}
-                  className="inline-flex items-center justify-center gap-2 bg-slate-900 hover:bg-slate-800 text-cyan-400 font-bold px-6 md:px-8 py-3 md:py-4 rounded-xl transition-all duration-300 hover:scale-105 hover:shadow-xl hover:shadow-cyan-500/50 border-2 border-cyan-500 text-sm md:text-base"
+                  onClick={descargarFichaTecnica}
+                  disabled={downloadingPDF}
+                  className="inline-flex items-center justify-center gap-2 bg-slate-900 hover:bg-slate-800 text-cyan-400 font-bold px-6 md:px-8 py-3 md:py-4 rounded-xl transition-all duration-300 hover:scale-105 hover:shadow-xl hover:shadow-cyan-500/50 border-2 border-cyan-500 text-sm md:text-base disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
                 >
                   <Download className="w-5 h-5" />
                   FICHA TÉCNICA
+                </button>
+                <button
+                  onClick={() => setShareModalOpen(true)}
+                  className="inline-flex items-center justify-center gap-2 bg-white/10 backdrop-blur-md hover:bg-white/20 text-white font-bold px-6 md:px-8 py-3 md:py-4 rounded-xl transition-all duration-300 hover:scale-105 border-2 border-white/30 text-sm md:text-base"
+                >
+                  <Share2 className="w-5 h-5" />
+                  COMPARTIR
                 </button>
               </div>
             </div>

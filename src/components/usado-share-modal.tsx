@@ -9,6 +9,7 @@ import {
   MessageCircle,
   Mail,
   Check,
+  FileText,
 } from "lucide-react";
 
 import { Usados } from "@/types";
@@ -28,6 +29,7 @@ export function UsadoShareModal({
   const [shareOption, setShareOption] = useState<"link" | "whatsapp" | "email">(
     "whatsapp"
   );
+  const [includePdf, setIncludePdf] = useState(true);
 
   if (!isOpen || !usado) return null;
 
@@ -35,20 +37,33 @@ export function UsadoShareModal({
     usado.titulo ||
     `${usado.marca} ${usado.modelo}${usado.version ? ` ${usado.version}` : ""}`;
 
+  // Obtener URL del PDF
+  const getPdfUrl = () => {
+    const apiUrl =
+      process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000/api";
+    return `${apiUrl}/usados/public/${usado._id}/ficha-tecnica`;
+  };
+
   // Generar mensaje para compartir
   const generateShareMessage = () => {
     const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
     const fullUrl = `${baseUrl}/usados/${usado._id}`;
 
     let message = `*${vehicleTitle}*\n\n`;
-    
-    if (usado.anio) message += `📅 Año: ${new Date(usado.anio).getFullYear()}\n`;
-    if (usado.kilometraje) message += `🛣️ Km: ${usado.kilometraje.toLocaleString()}\n`;
-    
-    message += `\nVer vehículo completo:\n`;
-    message += `${fullUrl}\n\n`;
 
-    message += `-----------------------------------\n`;
+    if (usado.anio) message += `📅 Año: ${usado.anio}\n`;
+    if (usado.kilometraje)
+      message += `🛣️ Km: ${usado.kilometraje.toLocaleString()}\n`;
+
+    message += `\n🔗 Ver vehículo completo:\n`;
+    message += `${fullUrl}\n`;
+
+    if (includePdf) {
+      message += `\n📄 Ficha técnica PDF:\n`;
+      message += `${getPdfUrl()}\n`;
+    }
+
+    message += `\n-----------------------------------\n`;
     message += `Consultas? Escribinos sin compromiso!`;
 
     return message;
@@ -164,6 +179,29 @@ export function UsadoShareModal({
                 <span className="text-sm font-medium">Copiar</span>
               </button>
             </div>
+          </div>
+
+          {/* Opción de incluir PDF */}
+          <div className="mb-6">
+            <label className="flex items-center gap-3 p-4 rounded-xl border-2 border-slate-200 hover:border-cyan-300 transition-all cursor-pointer bg-white">
+              <input
+                type="checkbox"
+                checked={includePdf}
+                onChange={(e) => setIncludePdf(e.target.checked)}
+                className="w-5 h-5 rounded border-slate-300 text-cyan-600 focus:ring-cyan-500 cursor-pointer"
+              />
+              <div className="flex items-center gap-2 flex-1">
+                <FileText className="w-5 h-5 text-cyan-600" />
+                <div>
+                  <span className="text-sm font-semibold text-slate-700">
+                    Incluir Ficha Técnica PDF
+                  </span>
+                  <p className="text-xs text-slate-500">
+                    Agrega el enlace al PDF con todas las especificaciones
+                  </p>
+                </div>
+              </div>
+            </label>
           </div>
 
           {/* Preview del mensaje */}

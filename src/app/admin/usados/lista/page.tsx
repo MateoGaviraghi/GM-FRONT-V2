@@ -164,9 +164,12 @@ export default function ListaUsados() {
     }
   };
 
-  const formatearAnio = (fecha?: Date | string) => {
-    if (!fecha) return "N/A";
-    return new Date(fecha).getFullYear();
+  const formatearAnio = (anio?: number | Date | string) => {
+    if (!anio) return "N/A";
+    // Si es número, devolverlo directamente
+    if (typeof anio === "number") return anio;
+    // Si es string o Date, usar getFullYear (compatibilidad)
+    return new Date(anio).getFullYear();
   };
 
   const formatearKilometraje = (km?: number) => {

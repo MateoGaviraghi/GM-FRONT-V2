@@ -440,7 +440,7 @@ export default function ListaRemolques() {
                   {remolque.anio && (
                     <div className="flex items-center gap-2">
                       <Calendar className="h-4 w-4 text-gray-400" />
-                      <span>{new Date(remolque.anio).getFullYear()}</span>
+                      <span>{remolque.anio}</span>
                     </div>
                   )}
                 </div>

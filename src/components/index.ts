@@ -29,3 +29,8 @@ export { FotonShareModal } from "./foton-share-modal";
 export { RemolqueShareModal } from "./remolque-share-modal";
 export { UsadoShareModal } from "./usado-share-modal";
 export { PageTransitionProvider, usePageTransition } from "./page-transition";
+export {
+  FichaTecnicaButton,
+  FichaTecnicaIconButton,
+  FichaTecnicaCardButton,
+} from "./ficha-tecnica-button";

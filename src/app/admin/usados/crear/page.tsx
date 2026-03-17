@@ -310,8 +310,11 @@ export default function CrearUsados() {
       // Campos obligatorios
       apiFormData.append("marca", formData.marca);
       apiFormData.append("modelo", formData.modelo);
-      apiFormData.append("anio", `${formData.anio}-01-01`);
+      apiFormData.append("anio", formData.anio);
       apiFormData.append("kilometraje", formData.kilometraje.toString());
+
+      // Estado por defecto: Disponible (para que se muestre en la página pública)
+      apiFormData.append("estado", "Disponible");
 
       // Campos opcionales
       if (formData.titulo) apiFormData.append("titulo", formData.titulo);
@@ -372,24 +375,76 @@ export default function CrearUsados() {
       // Redirigir al dashboard con mensaje de éxito
       router.push("/admin/usados?created=true");
     } catch (error: unknown) {
-      const errorMessage =
-        (
-          error as {
-            response?: { data?: { message?: string; error?: string } };
-          }
-        ).response?.data?.message ||
-        (
-          error as {
-            response?: { data?: { message?: string; error?: string } };
-          }
-        ).response?.data?.error ||
-        "Error al crear el vehículo usado. Por favor, inténtelo nuevamente.";
+      const err = error as {
+        response?: { data?: { message?: string | string[]; error?: string } };
+      };
+      console.error("❌ Error creando vehículo usado:", error);
+      console.error("📋 Respuesta del servidor:", err.response?.data);
 
-      setErrors({
-        submit: Array.isArray(errorMessage)
-          ? errorMessage.join(", ")
-          : errorMessage,
-      });
+      // Limpiar errores anteriores
+      const fieldErrors: FormErrors = {};
+
+      // Extraer mensajes de error
+      if (err.response?.data?.message) {
+        const messages = err.response.data.message;
+
+        if (Array.isArray(messages)) {
+          // Parsear errores de validación y asignarlos a campos específicos
+          console.error("🔍 Errores de validación:", messages);
+
+          const generalErrors: string[] = [];
+
+          messages.forEach((msg: string) => {
+            // Parsear mensajes como "property marca should not be empty"
+            const fieldMatch = msg.match(/property (\w+) (.+)/);
+
+            if (fieldMatch) {
+              const fieldName = fieldMatch[1];
+              const errorMsg = fieldMatch[2];
+
+              // Traducir algunos mensajes comunes
+              let translatedMsg = errorMsg;
+              if (errorMsg.includes("should not be empty"))
+                translatedMsg = "Este campo es requerido";
+              else if (errorMsg.includes("must be a string"))
+                translatedMsg = "Debe ser texto";
+              else if (errorMsg.includes("must be a number"))
+                translatedMsg = "Debe ser un número";
+              else if (errorMsg.includes("must be an array"))
+                translatedMsg = "Debe ser una lista";
+
+              fieldErrors[fieldName] = translatedMsg;
+            } else {
+              generalErrors.push(msg);
+            }
+          });
+
+          // Si hay errores generales, mostrarlos también
+          if (generalErrors.length > 0) {
+            fieldErrors.submit = generalErrors.join("\n• ");
+          }
+
+          // Si solo hay errores de campo, mostrar mensaje general
+          if (
+            Object.keys(fieldErrors).length > 0 &&
+            generalErrors.length === 0
+          ) {
+            fieldErrors.submit =
+              "Por favor, corrige los errores en el formulario";
+          }
+        } else {
+          // Error simple
+          fieldErrors.submit = messages;
+        }
+      } else if (err.response?.data?.error) {
+        fieldErrors.submit = err.response.data.error;
+      } else if ((error as Error).message) {
+        fieldErrors.submit = (error as Error).message;
+      } else {
+        fieldErrors.submit = "Error al crear el vehículo usado.";
+      }
+
+      setErrors(fieldErrors);
     } finally {
       setLoading(false);
     }
