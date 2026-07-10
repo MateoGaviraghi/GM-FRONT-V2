@@ -20,6 +20,10 @@ interface ProtectedRouteProps {
   children: React.ReactNode;
 }
 
+// Validación una sola vez por sesión: tras el primer OK, las navegaciones
+// siguientes renderizan de inmediato (el re-check corre en background).
+let sessionValidated = false;
+
 export function ProtectedRoute({ children }: ProtectedRouteProps) {
   const { isAuthenticated, loading } = useAuth();
   const [shouldRender, setShouldRender] = useState(false);
@@ -58,6 +62,7 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
 
     // Si pasó todas las verificaciones y no está cargando, permitir renderizado
     if (!loading && isAuthenticated) {
+      sessionValidated = true;
       setShouldRender(true);
     } else if (!loading && !isAuthenticated) {
       // Doble verificación: si useAuth dice que no está autenticado, redirigir
@@ -66,8 +71,9 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
     }
   }, [isAuthenticated, loading]);
 
-  // Mostrar loading mientras verifica autenticación
-  if (loading || !shouldRender) {
+  // Mostrar loading mientras verifica autenticación (solo la primera vez por
+  // sesión: si ya se validó, se renderiza de inmediato sin spinner).
+  if (!sessionValidated && (loading || !shouldRender)) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-50">
         <div className="text-center">

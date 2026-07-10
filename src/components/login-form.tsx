@@ -1,20 +1,13 @@
 "use client";
 
-import React, { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Eye, EyeOff, LogIn, CheckCircle } from "lucide-react";
+import React, { useState, useRef } from "react";
+import Image from "next/image";
+import { Eye, EyeOff, LogIn, CheckCircle, AlertCircle } from "lucide-react";
 import { UsuarioService } from "@/services";
 import { LoginRequest } from "@/types";
 import { useRouter } from "next/navigation";
+import { AdminButton, Field, TextInput } from "@/components/admin/kit";
+import { cn } from "@/lib/utils";
 
 interface FormErrors {
   email?: string;
@@ -24,6 +17,7 @@ interface FormErrors {
 
 export function LoginForm() {
   const router = useRouter();
+  const formRef = useRef<HTMLFormElement>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
@@ -149,150 +143,130 @@ export function LoginForm() {
 
   if (isSuccess) {
     return (
-      <Card className="border-2 border-gray-200">
-        <CardContent className="pt-6">
-          <div className="text-center">
-            <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
-            <h2 className="text-2xl font-bold text-slate-800 mb-2">
-              ¡Bienvenido!
-            </h2>
-            <p className="text-slate-600 mb-6">
-              Has iniciado sesión correctamente. Redirigiendo...
-            </p>
-          </div>
-        </CardContent>
-      </Card>
+      <div className="flex min-h-screen items-center justify-center bg-[#F6F7F9] px-4">
+        <div className="w-full max-w-[420px] rounded-2xl border border-gray-100 bg-white p-8 text-center shadow-sm">
+          <CheckCircle className="mx-auto mb-4 size-12 text-emerald-500" strokeWidth={1.75} />
+          <h2 className="text-[24px] font-semibold tracking-tight text-gray-900">¡Bienvenido!</h2>
+          <p className="mt-1.5 text-[16px] text-gray-500">
+            Iniciaste sesión correctamente. Te estamos llevando al panel...
+          </p>
+        </div>
+      </div>
     );
   }
 
   return (
-    <Card className="border-2 border-gray-200 mx-4 md:mx-0">
-      <CardHeader className="text-center px-4 md:px-6">
-        <div className="w-12 h-12 md:w-16 md:h-16 bg-cyan-100 rounded-full flex items-center justify-center mx-auto mb-4">
-          <LogIn className="w-6 h-6 md:w-8 md:h-8 text-cyan-600" />
+    <div className="flex min-h-screen items-center justify-center bg-[#F6F7F9] px-4">
+      <div className="w-full max-w-[420px] rounded-2xl border border-gray-100 bg-white p-8 shadow-sm">
+        <div className="flex items-center gap-2.5">
+          <Image
+            src="/images/logo/logoGM-Photoroom.png"
+            alt="Guzmán Motors"
+            width={36}
+            height={36}
+            className="h-9 w-auto"
+          />
+          <span className="text-[17px] font-semibold tracking-tight text-gray-900">
+            Guzmán Motors
+          </span>
         </div>
-        <CardTitle className="text-xl md:text-2xl text-slate-800">
-          Bienvenido de vuelta
-        </CardTitle>
-        <CardDescription className="text-sm md:text-base">
-          Ingresa tus credenciales para acceder
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="px-4 md:px-6">
-        <form onSubmit={handleSubmit} className="space-y-4 md:space-y-6">
+
+        <h1 className="mt-7 text-[24px] font-semibold tracking-tight text-gray-900">
+          Iniciar sesión
+        </h1>
+        <p className="mt-1.5 text-[16px] text-gray-500">Ingresá tus datos para entrar al panel</p>
+
+        <form ref={formRef} onSubmit={handleSubmit} className="mt-7 space-y-5">
           {/* Error general */}
           {errors.general && (
             <div
-              className={`border rounded-md p-3 flex items-start gap-2 ${
+              className={cn(
+                "flex items-start gap-2 rounded-xl border p-3.5",
                 rateLimitCountdown > 0
-                  ? "bg-orange-50 border-orange-200"
-                  : "bg-red-50 border-red-200"
-              }`}
+                  ? "border-amber-100 bg-amber-50"
+                  : "border-red-100 bg-red-50"
+              )}
             >
-              <LogIn
-                className={`h-4 w-4 mt-0.5 flex-shrink-0 ${
-                  rateLimitCountdown > 0 ? "text-orange-500" : "text-red-500"
-                }`}
+              <AlertCircle
+                className={cn("mt-0.5 size-5 shrink-0", rateLimitCountdown > 0 ? "text-amber-700" : "text-red-600")}
+                strokeWidth={2}
               />
               <div className="flex-1">
-                <span
-                  className={`text-sm ${
-                    rateLimitCountdown > 0 ? "text-orange-700" : "text-red-700"
-                  }`}
-                >
+                <span className={cn("text-[15px] font-medium", rateLimitCountdown > 0 ? "text-amber-700" : "text-red-600")}>
                   {errors.general}
                 </span>
                 {rateLimitCountdown > 0 && (
                   <div className="mt-2 flex items-center gap-2">
-                    <div className="text-2xl font-bold text-orange-600">
-                      {rateLimitCountdown}s
-                    </div>
-                    <div className="text-xs text-orange-600">restantes</div>
+                    <span className="text-2xl font-bold text-amber-700">{rateLimitCountdown}s</span>
+                    <span className="text-[15px] font-medium text-amber-700">restantes</span>
                   </div>
                 )}
               </div>
             </div>
           )}
 
-          <div className="space-y-2">
-            <Label htmlFor="email" className="text-slate-700 font-medium">
-              Correo Electrónico
-            </Label>
-            <Input
+          <Field label="Email" htmlFor="email" required error={errors.email}>
+            <TextInput
               id="email"
               name="email"
               type="email"
               value={formData.email}
               onChange={handleChange}
               placeholder="tu@email.com"
-              className={`border-gray-300 focus:border-cyan-500 focus:ring-cyan-500 ${
-                errors.email
-                  ? "border-red-500 focus:border-red-500 focus:ring-red-500"
-                  : ""
-              }`}
+              invalid={!!errors.email}
               required
             />
-            {errors.email && (
-              <p className="text-red-500 text-xs mt-1">{errors.email}</p>
-            )}
-          </div>
+          </Field>
 
-          <div className="space-y-2">
-            <Label htmlFor="password" className="text-slate-700 font-medium">
-              Contraseña
-            </Label>
+          <Field label="Contraseña" htmlFor="password" required error={errors.password}>
             <div className="relative">
-              <Input
+              <TextInput
                 id="password"
                 name="password"
                 type={showPassword ? "text" : "password"}
                 value={formData.password}
                 onChange={handleChange}
                 placeholder="Tu contraseña"
-                className={`border-gray-300 focus:border-cyan-500 focus:ring-cyan-500 pr-10 ${
-                  errors.password
-                    ? "border-red-500 focus:border-red-500 focus:ring-red-500"
-                    : ""
-                }`}
+                invalid={!!errors.password}
                 required
+                className="pr-28"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                className="absolute right-3 top-1/2 inline-flex -translate-y-1/2 items-center gap-1.5 text-[16px] font-semibold text-gray-500 transition-colors duration-150 hover:text-gray-900"
               >
-                {showPassword ? (
-                  <EyeOff className="w-4 h-4" />
-                ) : (
-                  <Eye className="w-4 h-4" />
-                )}
+                {showPassword ? <EyeOff className="size-4" strokeWidth={2} /> : <Eye className="size-4" strokeWidth={2} />}
+                {showPassword ? "Ocultar" : "Mostrar"}
               </button>
             </div>
-            {errors.password && (
-              <p className="text-red-500 text-xs mt-1">{errors.password}</p>
-            )}
-          </div>
+          </Field>
 
-          <Button
+          <AdminButton
+            variant="primary"
+            icon={LogIn}
             type="submit"
-            className="w-full bg-cyan-500 hover:bg-cyan-600 text-white py-2 md:py-3 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-            disabled={isLoading || rateLimitCountdown > 0}
+            className={cn(
+              "w-full",
+              (isLoading || rateLimitCountdown > 0) && "pointer-events-none opacity-50"
+            )}
+            onClick={() => {
+              if (isLoading || rateLimitCountdown > 0) return;
+              formRef.current?.requestSubmit();
+            }}
           >
-            <LogIn className="w-4 h-4 mr-2" />
             {isLoading
               ? "Iniciando sesión..."
               : rateLimitCountdown > 0
-              ? `Espera ${rateLimitCountdown}s`
-              : "Iniciar Sesión"}
-          </Button>
-
-          <div className="text-center">
-            <p className="text-xs md:text-sm text-slate-600">
-              Acceso exclusivo para administradores autorizados
-            </p>
-          </div>
+              ? `Esperá ${rateLimitCountdown}s`
+              : "Iniciar sesión"}
+          </AdminButton>
         </form>
-      </CardContent>
-    </Card>
+
+        <p className="mt-6 text-center text-[14px] text-gray-400">
+          Acceso exclusivo para administradores autorizados
+        </p>
+      </div>
+    </div>
   );
 }

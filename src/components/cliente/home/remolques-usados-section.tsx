@@ -1,26 +1,145 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import {
-  ChevronLeft,
-  ChevronRight,
-  Mail,
-  MessageCircle,
-  Phone,
-} from "lucide-react";
+import { ArrowLeft, ArrowRight, ArrowUpRight, Phone } from "lucide-react";
+import { FaWhatsapp } from "react-icons/fa";
+import gsap from "gsap";
+import { ScrollTrigger } from "gsap/ScrollTrigger";
+import { useGSAP } from "@gsap/react";
 import type { Remolque, Usados } from "@/types";
 import { remolqueService, usadosService } from "@/services";
+import { SectionHeading } from "./gm/section-heading";
+import { Reveal } from "./gm/reveal";
+import { GmButton } from "./gm/gm-button";
+import { cn } from "@/lib/utils";
 
-export function RemolquesUsadosSection() {
+gsap.registerPlugin(ScrollTrigger, useGSAP);
+
+const ITEMS_PER_SLIDE = 3;
+
+function CarouselControls({
+  onPrev,
+  onNext,
+  theme,
+  current,
+  total,
+}: {
+  onPrev: () => void;
+  onNext: () => void;
+  theme: "dark" | "light";
+  current: number;
+  total: number;
+}) {
+  const dark = theme === "dark";
+  const btn = cn(
+    "flex size-11 items-center justify-center border transition-colors duration-300",
+    dark
+      ? "border-line-dark-2 text-platinum hover:bg-platinum hover:text-carbon-0"
+      : "border-line-light-2 text-ink-0 hover:bg-ink-0 hover:text-paper-1"
+  );
+  return (
+    <div className="flex items-center gap-4">
+      <span className={cn("gm-label", dark ? "text-steel" : "text-ink-2")}>
+        {String(current + 1).padStart(2, "0")} /{" "}
+        {String(total).padStart(2, "0")}
+      </span>
+      <div className="flex">
+        <button type="button" onClick={onPrev} className={btn} aria-label="Anterior">
+          <ArrowLeft strokeWidth={1.5} className="size-5" />
+        </button>
+        <button
+          type="button"
+          onClick={onNext}
+          className={cn(btn, "-ml-px")}
+          aria-label="Siguiente"
+        >
+          <ArrowRight strokeWidth={1.5} className="size-5" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function EmptyState({
+  theme,
+  title,
+  text,
+  whatsappHref,
+}: {
+  theme: "dark" | "light";
+  title: string;
+  text: string;
+  whatsappHref: string;
+}) {
+  const dark = theme === "dark";
+  return (
+    <div
+      className={cn(
+        "border px-6 py-16 text-center sm:px-10",
+        dark ? "border-line-dark bg-carbon-2/30" : "border-line-light bg-paper-1"
+      )}
+    >
+      <div className="mx-auto max-w-lg">
+        <h3
+          className={cn(
+            "gm-display text-display-3",
+            dark ? "text-platinum" : "text-ink-0"
+          )}
+        >
+          {title}
+        </h3>
+        <p
+          className={cn(
+            "mt-4 text-base leading-relaxed sm:text-lg",
+            dark ? "text-silver" : "text-ink-1"
+          )}
+        >
+          {text}
+        </p>
+        <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
+          <GmButton
+            href={whatsappHref}
+            external
+            tone={dark ? "solidLight" : "solidDark"}
+            icon={FaWhatsapp}
+          >
+            WhatsApp
+          </GmButton>
+          <GmButton
+            href="/contacto"
+            tone={dark ? "outlineDark" : "outlineLight"}
+            icon={Phone}
+          >
+            Contactanos
+          </GmButton>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+type RemolquesUsadosSectionProps = {
+  /** Data resuelta en el servidor (ISR). null = fallback a fetch en cliente. */
+  initialRemolques?: Remolque[] | null;
+  initialUsados?: Usados[] | null;
+};
+
+export function RemolquesUsadosSection({
+  initialRemolques = null,
+  initialUsados = null,
+}: RemolquesUsadosSectionProps) {
   const [currentSlideRemolques, setCurrentSlideRemolques] = useState(0);
   const [currentSlideUsados, setCurrentSlideUsados] = useState(0);
-  const [remolques, setRemolques] = useState<Remolque[]>([]);
-  const [usados, setUsados] = useState<Usados[]>([]);
+  const [remolques, setRemolques] = useState<Remolque[]>(
+    initialRemolques ?? []
+  );
+  const [usados, setUsados] = useState<Usados[]>(initialUsados ?? []);
 
-  // Cargar remolques desde la API usando el servicio
+  // Fallback: cargar en cliente solo si el servidor no trajo data
   useEffect(() => {
+    if (initialRemolques !== null) return;
     const loadRemolques = async () => {
       try {
         const response = await remolqueService.getPublicRemolques({ limit: 6 });
@@ -31,10 +150,10 @@ export function RemolquesUsadosSection() {
       }
     };
     loadRemolques();
-  }, []);
+  }, [initialRemolques]);
 
-  // Cargar usados desde la API usando el servicio
   useEffect(() => {
+    if (initialUsados !== null) return;
     const loadUsados = async () => {
       try {
         const response = await usadosService.getPublicUsados({ limit: 6 });
@@ -45,141 +164,178 @@ export function RemolquesUsadosSection() {
       }
     };
     loadUsados();
-  }, []);
+  }, [initialUsados]);
 
-  const itemsPerSlide = 3;
-  const totalSlidesRemolques = Math.ceil(remolques.length / itemsPerSlide);
-  const totalSlidesUsados = Math.ceil(usados.length / itemsPerSlide);
+  const remolquesGridRef = useRef<HTMLDivElement>(null);
+  const usadosGridRef = useRef<HTMLDivElement>(null);
 
-  const nextSlideRemolques = () => {
+  /* Entrada en cascada de las cards (clip-path), disparada cuando la data
+     async ya existe; el ScrollTrigger previo se mata solo al re-ejecutar. */
+  useGSAP(
+    () => {
+      const grid = remolquesGridRef.current;
+      if (!grid) return;
+      const cards = grid.querySelectorAll<HTMLElement>("[data-home-card]");
+      if (!cards.length) return;
+      const reduce = window.matchMedia(
+        "(prefers-reduced-motion: reduce)"
+      ).matches;
+      if (reduce) {
+        gsap.set(cards, { clearProps: "all" });
+        return;
+      }
+      gsap.fromTo(
+        cards,
+        { clipPath: "inset(0 100% 100% 0)", opacity: 0 },
+        {
+          clipPath: "inset(0% 0% 0% 0%)",
+          opacity: 1,
+          duration: 0.75,
+          ease: "power3.out",
+          stagger: { each: 0.05, grid: "auto", from: "start" },
+          scrollTrigger: { trigger: grid, start: "top 88%", once: true },
+          clearProps: "clipPath",
+        }
+      );
+    },
+    { scope: remolquesGridRef, dependencies: [remolques.length] }
+  );
+
+  useGSAP(
+    () => {
+      const grid = usadosGridRef.current;
+      if (!grid) return;
+      const cards = grid.querySelectorAll<HTMLElement>("[data-home-card]");
+      if (!cards.length) return;
+      const reduce = window.matchMedia(
+        "(prefers-reduced-motion: reduce)"
+      ).matches;
+      if (reduce) {
+        gsap.set(cards, { clearProps: "all" });
+        return;
+      }
+      gsap.fromTo(
+        cards,
+        { clipPath: "inset(0 100% 100% 0)", opacity: 0 },
+        {
+          clipPath: "inset(0% 0% 0% 0%)",
+          opacity: 1,
+          duration: 0.75,
+          ease: "power3.out",
+          stagger: { each: 0.05, grid: "auto", from: "start" },
+          scrollTrigger: { trigger: grid, start: "top 88%", once: true },
+          clearProps: "clipPath",
+        }
+      );
+    },
+    { scope: usadosGridRef, dependencies: [usados.length] }
+  );
+
+  const totalSlidesRemolques = Math.ceil(remolques.length / ITEMS_PER_SLIDE);
+  const totalSlidesUsados = Math.ceil(usados.length / ITEMS_PER_SLIDE);
+
+  const nextSlideRemolques = () =>
     setCurrentSlideRemolques((prev) => (prev + 1) % totalSlidesRemolques);
-  };
-
-  const prevSlideRemolques = () => {
+  const prevSlideRemolques = () =>
     setCurrentSlideRemolques(
       (prev) => (prev - 1 + totalSlidesRemolques) % totalSlidesRemolques
     );
-  };
-
-  const nextSlideUsados = () => {
+  const nextSlideUsados = () =>
     setCurrentSlideUsados((prev) => (prev + 1) % totalSlidesUsados);
-  };
-
-  const prevSlideUsados = () => {
+  const prevSlideUsados = () =>
     setCurrentSlideUsados(
       (prev) => (prev - 1 + totalSlidesUsados) % totalSlidesUsados
     );
-  };
 
   return (
     <>
-      {/* REMOLQUES - Fondo Oscuro */}
-      <section className="relative py-20 md:py-28 bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900">
-        <div className="container mx-auto px-4">
-          <div>
-            {/* Header con diseño mejorado */}
-            <div className="text-center mb-16">
-              {/* Logos de empresas de remolques - Responsive */}
-              <div className="flex items-center justify-center gap-4 sm:gap-6 md:gap-10 lg:gap-14 mb-8 px-4">
-                {/* Logo Red Alcorta */}
-                <div className="flex items-center justify-center transition-transform duration-300 hover:scale-110 w-20 h-10 sm:w-28 sm:h-14 md:w-36 md:h-18 lg:w-[240px] lg:h-[120px]">
-                  <Image
-                    src="/images/logos empresas/logo- RED ALCORTA.png"
-                    alt="RED ALCORTA"
-                    width={240}
-                    height={120}
-                    className="w-full h-full object-contain"
-                  />
-                </div>
+      {/* ============ REMOLQUES — carbón ============ */}
+      <section className="relative overflow-hidden border-t border-line-dark bg-carbon-0 py-20 text-platinum sm:py-24 lg:py-28">
+        <div className="mx-auto w-full max-w-[1480px] px-5 sm:px-8 lg:px-12">
+          <SectionHeading
+            index="03"
+            label="Stock en consignación"
+            title="Remolques"
+            theme="dark"
+            aside={
+              remolques.length > 0 && totalSlidesRemolques > 1 ? (
+                <CarouselControls
+                  onPrev={prevSlideRemolques}
+                  onNext={nextSlideRemolques}
+                  theme="dark"
+                  current={currentSlideRemolques}
+                  total={totalSlidesRemolques}
+                />
+              ) : undefined
+            }
+          />
 
-                {/* Logo Sol y Brusa */}
-                <div className="flex items-center justify-center transition-transform duration-300 hover:scale-110 w-20 h-10 sm:w-28 sm:h-14 md:w-36 md:h-18 lg:w-[240px] lg:h-[120px]">
-                  <Image
-                    src="/images/logos empresas/LOGO SOLO Y BRUSA.png"
-                    alt="SOL Y BRUSA"
-                    width={240}
-                    height={120}
-                    className="w-full h-full object-contain"
-                  />
-                </div>
-
-                {/* Logo Lambert */}
-                <div className="flex items-center justify-center transition-transform duration-300 hover:scale-110 w-20 h-10 sm:w-28 sm:h-14 md:w-36 md:h-18 lg:w-[240px] lg:h-[120px]">
-                  <Image
-                    src="/images/logos empresas/LOGO LAMBERT.png"
-                    alt="LAMBERT"
-                    width={240}
-                    height={120}
-                    className="w-full h-full object-contain"
-                  />
-                </div>
-              </div>
-
-              <h2 className="text-5xl md:text-7xl font-extrabold bg-gradient-to-r from-white via-cyan-400 to-white bg-clip-text text-transparent mb-6 tracking-tight">
-                REMOLQUES
-              </h2>
-
-              <div className="flex items-center justify-center gap-4 mb-4">
-                <div className="h-1 w-32 bg-gradient-to-r from-transparent via-cyan-400 to-cyan-500 rounded-full"></div>
-                <div className="w-3 h-3 bg-cyan-400 rounded-full animate-pulse"></div>
-                <div className="h-1 w-32 bg-gradient-to-l from-transparent via-cyan-400 to-cyan-500 rounded-full"></div>
-              </div>
-            </div>
-
-            {/* Carrusel de Remolques */}
-            {remolques.length > 0 ? (
-              <div className="relative">
-                {totalSlidesRemolques > 1 && (
-                  <button
-                    onClick={prevSlideRemolques}
-                    className="absolute left-0 top-1/2 -translate-y-1/2 z-10 w-16 h-16 bg-gradient-to-br from-cyan-500 via-cyan-600 to-blue-600 hover:from-cyan-600 hover:via-cyan-700 hover:to-blue-700 rounded-full flex items-center justify-center transition-all duration-300 shadow-2xl hover:shadow-cyan-500/50 hover:scale-110 -translate-x-8 group"
-                    aria-label="Anterior"
-                  >
-                    <ChevronLeft className="w-8 h-8 text-white group-hover:scale-110 transition-transform" />
-                  </button>
+          {/* Fabricantes representados */}
+          <Reveal
+            variant="wipe"
+            className="mt-10 grid grid-cols-3 border-y border-line-dark"
+          >
+            {[
+              {
+                src: "/images/logos empresas/logo- RED ALCORTA.png",
+                alt: "RED ALCORTA",
+              },
+              {
+                src: "/images/logos empresas/LOGO SOLO Y BRUSA.png",
+                alt: "SOL Y BRUSA",
+              },
+              { src: "/images/logos empresas/LOGO LAMBERT.png", alt: "LAMBERT" },
+            ].map((logo, i) => (
+              <div
+                key={logo.alt}
+                data-reveal
+                className={cn(
+                  "flex items-center justify-center px-4 py-6 sm:py-8",
+                  i === 1 && "border-x border-line-dark"
                 )}
+              >
+                <Image
+                  src={logo.src}
+                  alt={logo.alt}
+                  width={240}
+                  height={120}
+                  className="h-8 w-auto object-contain opacity-85 mix-blend-screen sm:h-12 lg:h-14"
+                />
+              </div>
+            ))}
+          </Reveal>
 
-                <div className="overflow-hidden">
-                  <div
-                    className="flex transition-transform duration-700 ease-in-out"
-                    style={{
-                      transform: `translateX(-${currentSlideRemolques * 100}%)`,
-                    }}
-                  >
-                    {Array.from({ length: totalSlidesRemolques }).map(
-                      (_, slideIndex) => {
-                        const itemsInSlide = remolques.slice(
-                          slideIndex * itemsPerSlide,
-                          (slideIndex + 1) * itemsPerSlide
-                        );
-                        const shouldCenter =
-                          itemsInSlide.length < itemsPerSlide;
-
-                        return (
-                          <div
-                            key={slideIndex}
-                            className={`min-w-full grid gap-8 px-4 ${
-                              shouldCenter ? "justify-items-center" : ""
-                            }`}
-                            style={{
-                              display: "grid",
-                              gridTemplateColumns:
-                                itemsInSlide.length < 3
-                                  ? `repeat(${itemsInSlide.length}, minmax(0, 400px))`
-                                  : "repeat(3, minmax(0, 1fr))",
-                              justifyContent: shouldCenter
-                                ? "center"
-                                : "stretch",
-                            }}
-                          >
-                            {itemsInSlide.map((remolque) => (
+          <div className="mt-12">
+            {remolques.length > 0 ? (
+              <div ref={remolquesGridRef} className="overflow-hidden">
+                <div
+                  className="flex transition-transform duration-700 ease-[cubic-bezier(0.83,0,0.17,1)]"
+                  style={{
+                    transform: `translateX(-${currentSlideRemolques * 100}%)`,
+                  }}
+                >
+                  {Array.from({ length: totalSlidesRemolques }).map(
+                    (_, slideIndex) => {
+                      const itemsInSlide = remolques.slice(
+                        slideIndex * ITEMS_PER_SLIDE,
+                        (slideIndex + 1) * ITEMS_PER_SLIDE
+                      );
+                      return (
+                        <div
+                          key={slideIndex}
+                          className="flex min-w-full flex-wrap justify-center gap-6"
+                        >
+                          {itemsInSlide.map((remolque) => (
+                            <div
+                              key={remolque._id}
+                              data-home-card
+                              className="w-full sm:w-[calc(50%-0.75rem)] lg:w-[calc(25%-1.125rem)]"
+                            >
                               <Link
-                                key={remolque._id}
                                 href={`/remolques/${remolque._id}`}
-                                className="group relative rounded-3xl overflow-hidden shadow-2xl hover:shadow-cyan-500/30 transition-all duration-500 hover:-translate-y-2 max-w-md mx-auto w-full"
+                                className="group flex h-full w-full flex-col border border-line-dark bg-carbon-1 transition-colors duration-500 hover:bg-carbon-2"
                               >
-                                {/* Imagen de fondo */}
-                                <div className="absolute inset-0">
+                                <div className="relative aspect-[4/3] overflow-hidden border-b border-line-dark">
                                   <Image
                                     src={
                                       remolque.imagenes?.[0]?.secure_url ||
@@ -187,187 +343,125 @@ export function RemolquesUsadosSection() {
                                     }
                                     alt={remolque.titulo || "Remolque"}
                                     fill
-                                    className="object-cover group-hover:scale-110 transition-transform duration-700"
+                                    sizes="(max-width: 768px) 100vw, 33vw"
+                                    className="object-cover transition-transform duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:scale-[1.04]"
                                   />
-                                  {/* Overlay oscuro */}
-                                  <div className="absolute inset-0 bg-gradient-to-t from-slate-900/95 via-slate-900/70 to-slate-900/40"></div>
+                                  <span className="gm-label absolute left-4 top-4 border border-line-dark-2 bg-carbon-0/70 px-2.5 py-1.5 text-platinum backdrop-blur-sm">
+                                    Disponible
+                                  </span>
                                 </div>
-
-                                {/* Contenido sobre la imagen */}
-                                <div className="relative h-full min-h-[400px] flex flex-col justify-between p-7">
-                                  {/* Badge superior */}
-                                  <div className="flex justify-end">
-                                    <div className="bg-cyan-500/90 backdrop-blur-sm text-white px-4 py-2 rounded-full text-sm font-bold shadow-lg">
-                                      Disponible
-                                    </div>
+                                <div className="flex flex-1 flex-col p-6">
+                                  <div className="gm-label flex flex-wrap items-center gap-x-3 gap-y-2 text-steel">
+                                    {remolque.marca ? (
+                                      <span>{remolque.marca}</span>
+                                    ) : null}
+                                    {remolque.marca && remolque.tipoCarroceria ? (
+                                      <span
+                                        aria-hidden
+                                        className="h-3 w-px bg-line-dark-2"
+                                      />
+                                    ) : null}
+                                    {remolque.tipoCarroceria ? (
+                                      <span className="text-petrol-bright">
+                                        {remolque.tipoCarroceria}
+                                      </span>
+                                    ) : null}
                                   </div>
-
-                                  {/* Info inferior */}
-                                  <div>
-                                    <h3 className="text-2xl font-extrabold text-white mb-4 group-hover:text-cyan-400 transition-colors line-clamp-2 leading-tight">
-                                      {remolque.titulo}
-                                    </h3>
-                                    <div className="flex items-center gap-3 flex-wrap mb-4">
-                                      {remolque.marca && (
-                                        <span className="bg-white/10 backdrop-blur-sm text-white px-4 py-2 rounded-full font-semibold text-sm border border-white/20">
-                                          {remolque.marca}
-                                        </span>
-                                      )}
-                                      {remolque.tipoCarroceria && (
-                                        <span className="bg-cyan-500/20 backdrop-blur-sm text-cyan-300 px-4 py-2 rounded-full font-semibold text-sm border border-cyan-400/30">
-                                          {remolque.tipoCarroceria}
-                                        </span>
-                                      )}
-                                    </div>
-                                    {/* Botón de ver más */}
-                                    <div className="inline-flex items-center gap-2 bg-cyan-500 hover:bg-cyan-600 text-white px-6 py-3 rounded-full font-bold text-sm transition-all duration-300 group-hover:gap-3 shadow-lg">
-                                      <span>Ver detalles</span>
-                                      <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                                    </div>
-                                  </div>
+                                  <h3 className="gm-display mt-3 line-clamp-2 text-xl text-platinum">
+                                    {remolque.titulo}
+                                  </h3>
+                                  <span className="mt-auto flex items-center gap-2 pt-6 text-sm text-silver">
+                                    <span className="gm-underline gm-label">
+                                      Ver detalles
+                                    </span>
+                                    <ArrowUpRight
+                                      aria-hidden
+                                      strokeWidth={1.5}
+                                      className="size-4 text-petrol-bright transition-transform duration-300 group-hover:translate-x-0.5 group-hover:-translate-y-0.5"
+                                    />
+                                  </span>
                                 </div>
                               </Link>
-                            ))}
-                          </div>
-                        );
-                      }
-                    )}
-                  </div>
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    }
+                  )}
                 </div>
-
-                {totalSlidesRemolques > 1 && (
-                  <button
-                    onClick={nextSlideRemolques}
-                    className="absolute right-0 top-1/2 -translate-y-1/2 z-10 w-16 h-16 bg-gradient-to-br from-cyan-500 via-cyan-600 to-blue-600 hover:from-cyan-600 hover:via-cyan-700 hover:to-blue-700 rounded-full flex items-center justify-center transition-all duration-300 shadow-2xl hover:shadow-cyan-500/50 hover:scale-110 -translate-x-8 group"
-                    aria-label="Siguiente"
-                  >
-                    <ChevronRight className="w-8 h-8 text-white group-hover:scale-110 transition-transform" />
-                  </button>
-                )}
               </div>
             ) : (
-              <div className="text-center py-16 bg-gradient-to-br from-slate-100 to-slate-50 rounded-3xl border-2 border-dashed border-slate-300">
-                <div className="max-w-lg mx-auto">
-                  <div className="w-20 h-20 bg-cyan-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                    <Mail className="w-10 h-10 text-cyan-600" />
-                  </div>
-                  <h3 className="text-2xl font-bold text-slate-800 mb-4">
-                    ¿Buscás un remolque específico?
-                  </h3>
-                  <p className="text-slate-600 mb-6 text-lg">
-                    En este momento no tenemos remolques en stock, pero si te
-                    comunicás con nosotros podemos ayudarte a encontrar
-                    exactamente lo que necesitás
-                  </p>
-                  <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center px-4">
-                    <a
-                      href="https://wa.me/+5493424216850?text=Hola!%20Me%20interesa%20consultar%20sobre%20remolques%20disponibles."
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center justify-center gap-2 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white px-4 py-3 sm:px-6 sm:py-3.5 md:px-8 md:py-4 rounded-xl font-bold text-sm sm:text-base md:text-lg transition-all duration-300 transform hover:scale-105 shadow-lg"
-                    >
-                      <MessageCircle className="w-4 h-4 sm:w-5 sm:h-5" />
-                      <span>WHATSAPP</span>
-                    </a>
-                    <Link
-                      href="/contacto"
-                      className="inline-flex items-center justify-center gap-2 bg-gradient-to-r from-cyan-500 to-cyan-600 hover:from-cyan-600 hover:to-cyan-700 text-white px-4 py-3 sm:px-6 sm:py-3.5 md:px-8 md:py-4 rounded-xl font-bold text-sm sm:text-base md:text-lg transition-all duration-300 transform hover:scale-105 shadow-lg"
-                    >
-                      <Phone className="w-4 h-4 sm:w-5 sm:h-5" />
-                      <span>CONTACTANOS</span>
-                    </Link>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Botón Ver Más - solo si hay remolques */}
-            {remolques.length > 0 && (
-              <div className="text-center mt-12 px-4">
-                <Link
-                  href="/remolques"
-                  className="inline-flex items-center justify-center gap-2 sm:gap-3 bg-gradient-to-r from-cyan-500 to-cyan-600 hover:from-cyan-600 hover:to-cyan-700 text-white px-6 py-3.5 sm:px-8 sm:py-4 md:px-10 md:py-5 rounded-xl font-bold text-base sm:text-lg md:text-xl transition-all duration-300 transform hover:scale-105 shadow-xl hover:shadow-2xl"
-                >
-                  <span>VER MÁS REMOLQUES</span>
-                  <ChevronRight className="w-5 h-5 sm:w-6 sm:h-6" />
-                </Link>
-              </div>
+              <EmptyState
+                theme="dark"
+                title="¿Buscás un remolque específico?"
+                text="En este momento no tenemos remolques en stock, pero si te comunicás con nosotros podemos ayudarte a encontrar exactamente lo que necesitás"
+                whatsappHref="https://wa.me/+5493424216850?text=Hola!%20Me%20interesa%20consultar%20sobre%20remolques%20disponibles."
+              />
             )}
           </div>
+
+          {remolques.length > 0 && (
+            <div className="mt-12 flex justify-end border-t border-line-dark pt-8">
+              <GmButton href="/remolques" tone="outlineDark">
+                Ver más remolques
+              </GmButton>
+            </div>
+          )}
         </div>
       </section>
 
-      {/* USADOS - Fondo Blanco */}
-      <section className="relative py-20 md:py-28 bg-gradient-to-b from-slate-50 to-white">
-        <div className="container mx-auto px-4">
-          <div>
-            {/* Header con diseño mejorado */}
-            <div className="text-center mb-16">
-              <h2 className="text-5xl md:text-7xl font-extrabold bg-gradient-to-r from-slate-900 via-cyan-800 to-slate-900 bg-clip-text text-transparent mb-6 tracking-tight">
-                USADOS
-              </h2>
-              <div className="flex items-center justify-center gap-4 mb-4">
-                <div className="h-1 w-32 bg-gradient-to-r from-transparent via-cyan-500 to-cyan-600 rounded-full"></div>
-                <div className="w-3 h-3 bg-cyan-500 rounded-full animate-pulse"></div>
-                <div className="h-1 w-32 bg-gradient-to-l from-transparent via-cyan-500 to-cyan-600 rounded-full"></div>
-              </div>
-            </div>
+      {/* ============ USADOS — porcelana ============ */}
+      <section className="relative overflow-hidden bg-paper-0 py-20 text-ink-0 sm:py-24 lg:py-28">
+        <div className="mx-auto w-full max-w-[1480px] px-5 sm:px-8 lg:px-12">
+          <SectionHeading
+            index="04"
+            label="Seleccionados y verificados"
+            title="Usados"
+            theme="light"
+            aside={
+              usados.length > 0 && totalSlidesUsados > 1 ? (
+                <CarouselControls
+                  onPrev={prevSlideUsados}
+                  onNext={nextSlideUsados}
+                  theme="light"
+                  current={currentSlideUsados}
+                  total={totalSlidesUsados}
+                />
+              ) : undefined
+            }
+          />
 
-            {/* Carrusel de Usados */}
+          <div className="mt-12">
             {usados.length > 0 ? (
-              <div className="relative">
-                {totalSlidesUsados > 1 && (
-                  <button
-                    onClick={prevSlideUsados}
-                    className="absolute left-0 top-1/2 -translate-y-1/2 z-10 w-16 h-16 bg-gradient-to-br from-cyan-500 via-cyan-600 to-blue-600 hover:from-cyan-600 hover:via-cyan-700 hover:to-blue-700 rounded-full flex items-center justify-center transition-all duration-300 shadow-2xl hover:shadow-cyan-500/50 hover:scale-110 -translate-x-8 group"
-                    aria-label="Anterior"
-                  >
-                    <ChevronLeft className="w-8 h-8 text-white group-hover:scale-110 transition-transform" />
-                  </button>
-                )}
-
-                <div className="overflow-hidden">
-                  <div
-                    className="flex transition-transform duration-700 ease-in-out"
-                    style={{
-                      transform: `translateX(-${currentSlideUsados * 100}%)`,
-                    }}
-                  >
-                    {Array.from({ length: totalSlidesUsados }).map(
-                      (_, slideIndex) => {
-                        const itemsInSlide = usados.slice(
-                          slideIndex * itemsPerSlide,
-                          (slideIndex + 1) * itemsPerSlide
-                        );
-                        const shouldCenter =
-                          itemsInSlide.length < itemsPerSlide;
-
-                        return (
-                          <div
-                            key={slideIndex}
-                            className={`min-w-full grid grid-cols-1 md:grid-cols-${
-                              itemsInSlide.length
-                            } gap-8 px-4 ${
-                              shouldCenter ? "justify-items-center" : ""
-                            }`}
-                            style={{
-                              gridTemplateColumns:
-                                itemsInSlide.length < 3
-                                  ? `repeat(${itemsInSlide.length}, minmax(0, 400px))`
-                                  : "repeat(3, minmax(0, 1fr))",
-                              justifyContent: shouldCenter
-                                ? "center"
-                                : "stretch",
-                            }}
-                          >
-                            {itemsInSlide.map((usado) => (
+              <div ref={usadosGridRef} className="overflow-hidden">
+                <div
+                  className="flex transition-transform duration-700 ease-[cubic-bezier(0.83,0,0.17,1)]"
+                  style={{
+                    transform: `translateX(-${currentSlideUsados * 100}%)`,
+                  }}
+                >
+                  {Array.from({ length: totalSlidesUsados }).map(
+                    (_, slideIndex) => {
+                      const itemsInSlide = usados.slice(
+                        slideIndex * ITEMS_PER_SLIDE,
+                        (slideIndex + 1) * ITEMS_PER_SLIDE
+                      );
+                      return (
+                        <div
+                          key={slideIndex}
+                          className="flex min-w-full flex-wrap justify-center gap-6"
+                        >
+                          {itemsInSlide.map((usado) => (
+                            <div
+                              key={usado._id}
+                              data-home-card
+                              className="w-full sm:w-[calc(50%-0.75rem)] lg:w-[calc(25%-1.125rem)]"
+                            >
                               <Link
-                                key={usado._id}
                                 href={`/usados/${usado._id}`}
-                                className="group relative rounded-3xl overflow-hidden shadow-2xl hover:shadow-cyan-500/30 transition-all duration-500 hover:-translate-y-2 max-w-md mx-auto w-full"
+                                className="group flex h-full w-full flex-col border border-line-light bg-paper-1 transition-colors duration-500 hover:bg-white"
                               >
-                                {/* Imagen de fondo */}
-                                <div className="absolute inset-0">
+                                <div className="relative aspect-[4/3] overflow-hidden border-b border-line-light">
                                   <Image
                                     src={
                                       usado.imagenes?.[0]?.secure_url ||
@@ -375,111 +469,68 @@ export function RemolquesUsadosSection() {
                                     }
                                     alt={usado.titulo || "Vehículo usado"}
                                     fill
-                                    className="object-cover group-hover:scale-110 transition-transform duration-700"
+                                    sizes="(max-width: 768px) 100vw, 33vw"
+                                    className="object-cover transition-transform duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:scale-[1.04]"
                                   />
-                                  {/* Overlay oscuro */}
-                                  <div className="absolute inset-0 bg-gradient-to-t from-slate-900/95 via-slate-900/70 to-slate-900/40"></div>
+                                  <span className="gm-label absolute left-4 top-4 border border-line-light-2 bg-paper-1/80 px-2.5 py-1.5 text-ink-0 backdrop-blur-sm">
+                                    {usado.anio}
+                                  </span>
                                 </div>
-
-                                {/* Contenido sobre la imagen */}
-                                <div className="relative h-full min-h-[400px] flex flex-col justify-between p-7">
-                                  {/* Badge superior */}
-                                  <div className="flex justify-end">
-                                    <div className="bg-cyan-500/90 backdrop-blur-sm text-white px-4 py-2 rounded-full text-sm font-bold shadow-lg">
-                                      {usado.anio}
-                                    </div>
+                                <div className="flex flex-1 flex-col p-6">
+                                  <div className="gm-label flex flex-wrap items-center gap-x-3 gap-y-2 text-ink-2">
+                                    <span className="text-petrol-deep">
+                                      {usado.marca}
+                                    </span>
+                                    {usado.modelo ? (
+                                      <>
+                                        <span
+                                          aria-hidden
+                                          className="h-3 w-px bg-line-light-2"
+                                        />
+                                        <span>{usado.modelo}</span>
+                                      </>
+                                    ) : null}
                                   </div>
-
-                                  {/* Info inferior */}
-                                  <div>
-                                    <h3 className="text-2xl font-extrabold text-white mb-4 group-hover:text-cyan-400 transition-colors line-clamp-2 leading-tight">
-                                      {usado.titulo}
-                                    </h3>
-                                    <div className="flex items-center gap-3 flex-wrap mb-4">
-                                      <span className="bg-cyan-500/20 backdrop-blur-sm text-cyan-300 px-4 py-2 rounded-full font-semibold text-sm border border-cyan-400/30">
-                                        {usado.marca}
-                                      </span>
-                                      {usado.modelo && (
-                                        <span className="bg-white/10 backdrop-blur-sm text-white px-4 py-2 rounded-full font-semibold text-sm border border-white/20">
-                                          {usado.modelo}
-                                        </span>
-                                      )}
-                                    </div>
-                                    {/* Botón de ver más */}
-                                    <div className="inline-flex items-center gap-2 bg-cyan-500 hover:bg-cyan-600 text-white px-6 py-3 rounded-full font-bold text-sm transition-all duration-300 group-hover:gap-3 shadow-lg">
-                                      <span>Ver detalles</span>
-                                      <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                                    </div>
-                                  </div>
+                                  <h3 className="gm-display mt-3 line-clamp-2 text-xl text-ink-0">
+                                    {usado.titulo}
+                                  </h3>
+                                  <span className="mt-auto flex items-center gap-2 pt-6 text-sm text-ink-1">
+                                    <span className="gm-underline gm-label">
+                                      Ver detalles
+                                    </span>
+                                    <ArrowUpRight
+                                      aria-hidden
+                                      strokeWidth={1.5}
+                                      className="size-4 text-petrol-deep transition-transform duration-300 group-hover:translate-x-0.5 group-hover:-translate-y-0.5"
+                                    />
+                                  </span>
                                 </div>
                               </Link>
-                            ))}
-                          </div>
-                        );
-                      }
-                    )}
-                  </div>
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    }
+                  )}
                 </div>
-
-                {totalSlidesUsados > 1 && (
-                  <button
-                    onClick={nextSlideUsados}
-                    className="absolute right-0 top-1/2 -translate-y-1/2 z-10 w-16 h-16 bg-gradient-to-br from-cyan-500 via-cyan-600 to-blue-600 hover:from-cyan-600 hover:via-cyan-700 hover:to-blue-700 rounded-full flex items-center justify-center transition-all duration-300 shadow-2xl hover:shadow-cyan-500/50 hover:scale-110 translate-x-8 group"
-                    aria-label="Siguiente"
-                  >
-                    <ChevronRight className="w-8 h-8 text-white group-hover:scale-110 transition-transform" />
-                  </button>
-                )}
               </div>
             ) : (
-              <div className="text-center py-16 bg-gradient-to-br from-slate-100 to-slate-50 rounded-3xl border-2 border-dashed border-slate-300">
-                <div className="max-w-lg mx-auto">
-                  <div className="w-20 h-20 bg-cyan-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                    <Mail className="w-10 h-10 text-cyan-600" />
-                  </div>
-                  <h3 className="text-2xl font-bold text-slate-800 mb-4">
-                    ¿Buscás un vehículo usado?
-                  </h3>
-                  <p className="text-slate-600 mb-6 text-lg">
-                    En este momento no tenemos vehículos usados en stock, pero
-                    si te comunicás con nosotros podemos ayudarte a encontrar
-                    exactamente lo que necesitás
-                  </p>
-                  <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center px-4">
-                    <a
-                      href="https://wa.me/5493424216850?text=Hola!%20Me%20interesa%20consultar%20sobre%20veh%C3%ADculos%20usados%20disponibles."
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center justify-center gap-2 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white px-4 py-3 sm:px-6 sm:py-3.5 md:px-8 md:py-4 rounded-xl font-bold text-sm sm:text-base md:text-lg transition-all duration-300 transform hover:scale-105 shadow-lg"
-                    >
-                      <MessageCircle className="w-4 h-4 sm:w-5 sm:h-5" />
-                      <span>WHATSAPP</span>
-                    </a>
-                    <Link
-                      href="/contacto"
-                      className="inline-flex items-center justify-center gap-2 bg-gradient-to-r from-cyan-500 to-cyan-600 hover:from-cyan-600 hover:to-cyan-700 text-white px-4 py-3 sm:px-6 sm:py-3.5 md:px-8 md:py-4 rounded-xl font-bold text-sm sm:text-base md:text-lg transition-all duration-300 transform hover:scale-105 shadow-lg"
-                    >
-                      <Phone className="w-4 h-4 sm:w-5 sm:h-5" />
-                      <span>CONTACTANOS</span>
-                    </Link>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Botón Ver Más - solo si hay usados */}
-            {usados.length > 0 && (
-              <div className="text-center mt-12 px-4">
-                <Link
-                  href="/usados"
-                  className="inline-flex items-center justify-center gap-2 sm:gap-3 bg-gradient-to-r from-cyan-500 to-cyan-600 hover:from-cyan-600 hover:to-cyan-700 text-white px-6 py-3.5 sm:px-8 sm:py-4 md:px-10 md:py-5 rounded-xl font-bold text-base sm:text-lg md:text-xl transition-all duration-300 transform hover:scale-105 shadow-xl hover:shadow-2xl"
-                >
-                  <span>VER MÁS USADOS</span>
-                  <ChevronRight className="w-5 h-5 sm:w-6 sm:h-6" />
-                </Link>
-              </div>
+              <EmptyState
+                theme="light"
+                title="¿Buscás un vehículo usado?"
+                text="En este momento no tenemos vehículos usados en stock, pero si te comunicás con nosotros podemos ayudarte a encontrar exactamente lo que necesitás"
+                whatsappHref="https://wa.me/5493424216850?text=Hola!%20Me%20interesa%20consultar%20sobre%20veh%C3%ADculos%20usados%20disponibles."
+              />
             )}
           </div>
+
+          {usados.length > 0 && (
+            <div className="mt-12 flex justify-end border-t border-line-light pt-8">
+              <GmButton href="/usados" tone="outlineLight">
+                Ver más usados
+              </GmButton>
+            </div>
+          )}
         </div>
       </section>
     </>

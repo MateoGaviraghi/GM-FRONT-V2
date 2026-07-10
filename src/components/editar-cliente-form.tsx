@@ -1,16 +1,29 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  AdminButton,
+  DraftBanner,
+  Field,
+  formatTelefonoAR,
+  FormSection,
+  FormShell,
+  MaskedInput,
+  SelectField,
+  Skeleton,
+  TextareaField,
+  TextInput,
+  mapApiError,
+  useFormDraft,
+  useToast,
+  useUnsavedGuard,
+} from "@/components/admin/kit";
 import { ClienteService, CreateClienteRequest } from "@/services";
-import { User, Car, CheckCircle, AlertCircle, Loader2, X } from "lucide-react";
+import { CheckCircle, AlertCircle, X } from "lucide-react";
 import { Cliente } from "@/types/cliente";
 
 // Schema sin campos requeridos - todos opcionales
@@ -49,15 +62,30 @@ export function EditarClienteForm({ clienteId }: EditarClienteFormProps) {
   const [loadingCliente, setLoadingCliente] = useState(true);
   const [cliente, setCliente] = useState<Cliente | null>(null);
   const router = useRouter();
+  const { showToast } = useToast();
 
   const {
     register,
     handleSubmit,
     setValue,
-    formState: { errors, isSubmitting },
+    reset,
+    control,
+    formState: { errors, isSubmitting, isDirty },
   } = useForm<FormData>({
     resolver: zodResolver(schema),
   });
+
+  // Un ÚNICO useWatch global; los valores puntuales se derivan de él (4R2.f-5)
+  const allValues = useWatch({ control });
+  const telefonoCelularValue = allValues.telefonoCelular || "";
+  const telefonoFijoValue = allValues.telefonoFijo || "";
+
+  const { hasDraft, restoreDraft, dismissDraft } = useFormDraft<FormData>(
+    `cliente-editar-${clienteId}`,
+    allValues as FormData,
+    (draft) => reset(draft)
+  );
+  useUnsavedGuard(isDirty);
 
   // Cargar datos del cliente
   useEffect(() => {
@@ -72,8 +100,8 @@ export function EditarClienteForm({ clienteId }: EditarClienteFormProps) {
         // Pre-poblar el formulario
         setValue("nombreCompleto", clienteData.nombreCompleto || "");
         setValue("correoElectronico", clienteData.correoElectronico || "");
-        setValue("telefonoCelular", clienteData.telefonoCelular || "");
-        setValue("telefonoFijo", clienteData.telefonoFijo || "");
+        setValue("telefonoCelular", formatTelefonoAR(clienteData.telefonoCelular || ""));
+        setValue("telefonoFijo", formatTelefonoAR(clienteData.telefonoFijo || ""));
         setValue("provincia", clienteData.provincia || "");
         setValue("localidad", clienteData.localidad || "");
         setValue("direccion", clienteData.direccion || "");
@@ -98,6 +126,7 @@ export function EditarClienteForm({ clienteId }: EditarClienteFormProps) {
         } else {
           setError("Error al cargar los datos del cliente");
         }
+        showToast({ variant: "danger", message: mapApiError(err) });
       } finally {
         setLoadingCliente(false);
       }
@@ -106,6 +135,7 @@ export function EditarClienteForm({ clienteId }: EditarClienteFormProps) {
     if (clienteId) {
       cargarCliente();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clienteId, setValue]);
 
   const onSubmit = async (data: FormData) => {
@@ -180,6 +210,7 @@ export function EditarClienteForm({ clienteId }: EditarClienteFormProps) {
 
       await ClienteService.update(clienteId, clienteData);
       setSuccess("Cliente actualizado exitosamente.");
+      showToast({ variant: "success", message: "Los cambios se guardaron correctamente." });
 
       // Redirigir después de un momento
       setTimeout(() => {
@@ -187,11 +218,9 @@ export function EditarClienteForm({ clienteId }: EditarClienteFormProps) {
       }, 2000);
     } catch (err) {
       console.error("Error al actualizar cliente:", err);
-      if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError("Error al actualizar cliente");
-      }
+      const message = err instanceof Error ? err.message : "Error al actualizar cliente";
+      setError(message);
+      showToast({ variant: "danger", message: mapApiError(err) });
     } finally {
       setIsLoading(false);
     }
@@ -204,399 +233,214 @@ export function EditarClienteForm({ clienteId }: EditarClienteFormProps) {
   // Mostrar loading mientras carga el cliente
   if (loadingCliente) {
     return (
-      <Card>
-        <CardContent className="flex items-center justify-center py-12">
-          <div className="text-center">
-            <Loader2 className="w-12 h-12 animate-spin text-cyan-500 mx-auto mb-4" />
-            <p className="text-slate-600">Cargando datos del cliente...</p>
-          </div>
-        </CardContent>
-      </Card>
+      <div className="space-y-4 rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+        <Skeleton className="h-7 w-64" />
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} className="h-11 w-full" />
+          ))}
+        </div>
+        <p className="text-center text-[16px] text-gray-500">Cargando datos del cliente…</p>
+      </div>
     );
   }
 
   // Mostrar error si no se pudo cargar
   if (error && !cliente) {
     return (
-      <Card className="border-red-200">
-        <CardContent className="pt-6">
-          <div className="text-center">
-            <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
-            <h3 className="text-lg font-bold text-slate-800 mb-2">
-              Error al cargar cliente
-            </h3>
-            <p className="text-red-600 mb-4">{error}</p>
-            <div className="flex gap-2 justify-center">
-              <Button onClick={handleCancel} variant="outline">
-                Volver a la Lista
-              </Button>
-              <Button onClick={() => window.location.reload()}>
-                Reintentar
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      <div className="rounded-2xl border border-gray-100 bg-white p-8 text-center shadow-sm">
+        <span className="mx-auto mb-4 flex size-14 items-center justify-center rounded-full bg-red-50 text-red-600">
+          <AlertCircle className="size-7" strokeWidth={1.75} aria-hidden />
+        </span>
+        <h3 className="mb-2 text-[20px] font-semibold text-gray-900">Error al cargar cliente</h3>
+        <p className="mb-4 text-[16px] font-medium text-red-600">{error}</p>
+        <div className="flex justify-center gap-3">
+          <AdminButton variant="secondary" onClick={handleCancel}>
+            Volver a la lista
+          </AdminButton>
+          <AdminButton variant="primary" onClick={() => window.location.reload()}>
+            Reintentar
+          </AdminButton>
+        </div>
+      </div>
     );
   }
 
   // Mostrar mensaje de éxito
   if (success) {
     return (
-      <Card className="border-green-200">
-        <CardContent className="pt-6">
-          <div className="text-center">
-            <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
-            <h3 className="text-lg font-bold text-slate-800 mb-2">
-              ¡Cliente actualizado exitosamente!
-            </h3>
-            <p className="text-slate-600 mb-4">
-              Los cambios han sido guardados correctamente.
-            </p>
-            <p className="text-sm text-slate-500">
-              Redirigiendo a la lista de clientes...
-            </p>
-          </div>
-        </CardContent>
-      </Card>
+      <div className="rounded-2xl border border-gray-100 bg-white p-8 text-center shadow-sm">
+        <span className="mx-auto mb-4 flex size-14 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
+          <CheckCircle className="size-7" strokeWidth={1.75} aria-hidden />
+        </span>
+        <h3 className="mb-2 text-[20px] font-semibold text-gray-900">¡Cliente actualizado exitosamente!</h3>
+        <p className="mb-4 text-[16px] text-gray-500">Los cambios han sido guardados correctamente.</p>
+        <p className="text-[16px] text-gray-500">Redirigiendo a la lista de clientes…</p>
+      </div>
     );
   }
 
   return (
     <div className="space-y-6">
+      {hasDraft ? <DraftBanner onRestore={restoreDraft} onDismiss={dismissDraft} /> : null}
+
       {/* Información actual del cliente */}
       {cliente && (
-        <Card className="border-blue-200 bg-blue-50">
-          <CardHeader>
-            <CardTitle className="text-blue-800">
-              Editando: {cliente.nombreCompleto || "Cliente sin nombre"}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-              <div>
-                <span className="font-medium text-blue-700">Email:</span>{" "}
-                {cliente.correoElectronico || "No especificado"}
-              </div>
-              <div>
-                <span className="font-medium text-blue-700">Teléfono:</span>{" "}
-                {cliente.telefonoCelular || "No especificado"}
-              </div>
-              <div>
-                <span className="font-medium text-blue-700">Ubicación:</span>{" "}
-                {[cliente.localidad, cliente.provincia]
-                  .filter(Boolean)
-                  .join(", ") || "No especificado"}
-              </div>
+        <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+          <h2 className="mb-3 text-[16.5px] font-semibold text-gray-900">
+            Editando: {cliente.nombreCompleto || "Cliente sin nombre"}
+          </h2>
+          <div className="grid grid-cols-1 gap-3 text-[16px] text-gray-500 md:grid-cols-3">
+            <div>
+              <span className="font-semibold text-gray-900">Email:</span>{" "}
+              {cliente.correoElectronico || "No especificado"}
             </div>
-          </CardContent>
-        </Card>
+            <div>
+              <span className="font-semibold text-gray-900">Teléfono:</span>{" "}
+              {cliente.telefonoCelular || "No especificado"}
+            </div>
+            <div>
+              <span className="font-semibold text-gray-900">Ubicación:</span>{" "}
+              {[cliente.localidad, cliente.provincia].filter(Boolean).join(", ") || "No especificado"}
+            </div>
+          </div>
+        </div>
       )}
 
-      {/* Datos Personales */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <User className="w-5 h-5 text-cyan-600" />
-            Datos Personales
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-            {/* Error general */}
-            {error && (
-              <div className="bg-red-50 border border-red-200 rounded-md p-3">
-                <span className="text-red-700 text-sm">{error}</span>
-              </div>
-            )}
+      <FormShell eyebrow="Clientes" title="Editar cliente" description="Modificá los datos del cliente. Los campos vacíos se pueden completar.">
+        {error && (
+          <div className="col-span-full flex items-start gap-2 rounded-xl border border-red-100 bg-red-50 p-3">
+            <AlertCircle className="mt-0.5 size-5 shrink-0 text-red-600" strokeWidth={2} aria-hidden />
+            <span className="text-[16px] font-medium text-red-600">{error}</span>
+          </div>
+        )}
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label
-                  htmlFor="nombreCompleto"
-                  className="text-slate-700 font-medium"
-                >
-                  Nombre Completo
-                </Label>
-                <Input
-                  id="nombreCompleto"
-                  {...register("nombreCompleto")}
-                  placeholder="Nombre completo del cliente"
-                  className={`border-slate-300 focus:border-cyan-400 focus:ring-cyan-400 ${
-                    errors.nombreCompleto
-                      ? "border-red-500 focus:border-red-500 focus:ring-red-500"
-                      : ""
-                  }`}
-                />
-                {errors.nombreCompleto && (
-                  <p className="text-red-500 text-xs mt-1">
-                    {errors.nombreCompleto.message}
-                  </p>
-                )}
-              </div>
+        <form onSubmit={handleSubmit(onSubmit)} className="contents">
+          <FormSection title="Datos personales" index={1}>
+            <Field label="Nombre completo" htmlFor="nombreCompleto" error={errors.nombreCompleto?.message}>
+              <TextInput
+                id="nombreCompleto"
+                {...register("nombreCompleto")}
+                placeholder="Nombre completo del cliente"
+                invalid={!!errors.nombreCompleto}
+              />
+            </Field>
 
-              <div className="space-y-2">
-                <Label
-                  htmlFor="fechaNacimiento"
-                  className="text-slate-700 font-medium"
-                >
-                  Fecha de Nacimiento
-                </Label>
-                <Input
-                  id="fechaNacimiento"
-                  {...register("fechaNacimiento")}
-                  type="date"
-                  className="border-slate-300 focus:border-cyan-400 focus:ring-cyan-400"
-                />
-              </div>
-            </div>
+            <Field label="Fecha de nacimiento" htmlFor="fechaNacimiento">
+              <TextInput id="fechaNacimiento" {...register("fechaNacimiento")} type="date" />
+            </Field>
 
-            <div className="space-y-2">
-              <Label
-                htmlFor="correoElectronico"
-                className="text-slate-700 font-medium"
-              >
-                Correo Electrónico
-              </Label>
-              <Input
+            <Field label="Correo electrónico" htmlFor="correoElectronico" error={errors.correoElectronico?.message}>
+              <TextInput
                 id="correoElectronico"
                 {...register("correoElectronico")}
                 type="email"
                 placeholder="cliente@email.com"
-                className={`border-slate-300 focus:border-cyan-400 focus:ring-cyan-400 ${
-                  errors.correoElectronico
-                    ? "border-red-500 focus:border-red-500 focus:ring-red-500"
-                    : ""
-                }`}
+                invalid={!!errors.correoElectronico}
               />
-              {errors.correoElectronico && (
-                <p className="text-red-500 text-xs mt-1">
-                  {errors.correoElectronico.message}
-                </p>
-              )}
-            </div>
+            </Field>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label
-                  htmlFor="telefonoCelular"
-                  className="text-slate-700 font-medium"
-                >
-                  Teléfono Celular
-                </Label>
-                <Input
-                  id="telefonoCelular"
-                  {...register("telefonoCelular")}
-                  placeholder="Número de celular"
-                  className="border-slate-300 focus:border-cyan-400 focus:ring-cyan-400"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label
-                  htmlFor="telefonoFijo"
-                  className="text-slate-700 font-medium"
-                >
-                  Teléfono Fijo
-                </Label>
-                <Input
-                  id="telefonoFijo"
-                  {...register("telefonoFijo")}
-                  placeholder="Número fijo"
-                  className="border-slate-300 focus:border-cyan-400 focus:ring-cyan-400"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label
-                  htmlFor="provincia"
-                  className="text-slate-700 font-medium"
-                >
-                  Provincia
-                </Label>
-                <Input
-                  id="provincia"
-                  {...register("provincia")}
-                  placeholder="Provincia"
-                  className="border-slate-300 focus:border-cyan-400 focus:ring-cyan-400"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label
-                  htmlFor="localidad"
-                  className="text-slate-700 font-medium"
-                >
-                  Localidad
-                </Label>
-                <Input
-                  id="localidad"
-                  {...register("localidad")}
-                  placeholder="Ciudad o localidad"
-                  className="border-slate-300 focus:border-cyan-400 focus:ring-cyan-400"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="direccion" className="text-slate-700 font-medium">
-                Dirección
-              </Label>
-              <Input
-                id="direccion"
-                {...register("direccion")}
-                placeholder="Dirección completa"
-                className="border-slate-300 focus:border-cyan-400 focus:ring-cyan-400"
+            <Field label="Teléfono celular" htmlFor="telefonoCelular">
+              <MaskedInput
+                id="telefonoCelular"
+                mask="telefono"
+                value={telefonoCelularValue}
+                onChange={(v) => setValue("telefonoCelular", v, { shouldDirty: true })}
               />
-            </div>
-          </form>
-        </CardContent>
-      </Card>
+            </Field>
 
-      {/* Datos del Vehículo */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Car className="w-5 h-5 text-green-600" />
-            Datos del Vehículo
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label
-                  htmlFor="tipoVehiculo"
-                  className="text-slate-700 font-medium"
-                >
-                  Tipo de Vehículo
-                </Label>
-                <Input
-                  id="tipoVehiculo"
-                  {...register("tipoVehiculo")}
-                  placeholder="Ej: Auto, Moto, Camioneta"
-                  className="border-slate-300 focus:border-cyan-400 focus:ring-cyan-400"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label
-                  htmlFor="anioCompra"
-                  className="text-slate-700 font-medium"
-                >
-                  Año de Compra
-                </Label>
-                <Input
-                  id="anioCompra"
-                  {...register("anioCompra")}
-                  type="number"
-                  min="1900"
-                  max="2100"
-                  placeholder="2023"
-                  className="border-slate-300 focus:border-cyan-400 focus:ring-cyan-400"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="marca" className="text-slate-700 font-medium">
-                  Marca
-                </Label>
-                <Input
-                  id="marca"
-                  {...register("marca")}
-                  placeholder="Ej: Toyota, Ford, Honda"
-                  className="border-slate-300 focus:border-cyan-400 focus:ring-cyan-400"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="modelo" className="text-slate-700 font-medium">
-                  Modelo
-                </Label>
-                <Input
-                  id="modelo"
-                  {...register("modelo")}
-                  placeholder="Ej: Corolla, Focus, Civic"
-                  className="border-slate-300 focus:border-cyan-400 focus:ring-cyan-400"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label
-                  htmlFor="tipoCliente"
-                  className="text-slate-700 font-medium"
-                >
-                  Tipo de Cliente
-                </Label>
-                <select
-                  id="tipoCliente"
-                  {...register("tipoCliente")}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-md focus:border-cyan-400 focus:ring-cyan-400"
-                >
-                  <option value="">Seleccionar tipo...</option>
-                  <option value="Comprador">Comprador</option>
-                  <option value="Vendedor">Vendedor</option>
-                  <option value="Consultor">Consultor</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label
-                htmlFor="observaciones"
-                className="text-slate-700 font-medium"
-              >
-                Observaciones
-              </Label>
-              <textarea
-                id="observaciones"
-                {...register("observaciones")}
-                placeholder="Notas adicionales sobre el cliente..."
-                className="w-full px-3 py-2 border border-slate-300 rounded-md focus:border-cyan-400 focus:ring-cyan-400 min-h-[80px] resize-y"
-                rows={3}
+            <Field label="Teléfono fijo" htmlFor="telefonoFijo">
+              <MaskedInput
+                id="telefonoFijo"
+                mask="telefono"
+                value={telefonoFijoValue}
+                onChange={(v) => setValue("telefonoFijo", v, { shouldDirty: true })}
               />
-            </div>
+            </Field>
 
-            {/* Botones de acción */}
-            <div className="flex gap-4 mt-8 pt-4 border-t border-slate-200">
-              <Button
-                onClick={handleSubmit(onSubmit)}
-                className="flex-1 bg-cyan-500 hover:bg-cyan-600 text-white font-medium py-3"
-                disabled={isLoading || isSubmitting}
-              >
-                {isLoading ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Actualizando...
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle className="w-4 h-4 mr-2" />
-                    Guardar Cambios
-                  </>
-                )}
-              </Button>
+            <Field label="Provincia" htmlFor="provincia">
+              <TextInput id="provincia" {...register("provincia")} placeholder="Provincia" />
+            </Field>
 
-              <Button
-                type="button"
-                onClick={handleCancel}
-                variant="outline"
-                className="flex-1 border-slate-300 text-slate-700 hover:bg-slate-50"
-                disabled={isLoading || isSubmitting}
-              >
-                <X className="w-4 h-4 mr-2" />
-                Cancelar
-              </Button>
-            </div>
+            <Field label="Localidad" htmlFor="localidad">
+              <TextInput id="localidad" {...register("localidad")} placeholder="Ciudad o localidad" />
+            </Field>
+
+            <Field label="Dirección" htmlFor="direccion" className="md:col-span-2">
+              <TextInput id="direccion" {...register("direccion")} placeholder="Dirección completa" />
+            </Field>
+          </FormSection>
+        </form>
+
+        <FormSection title="Datos del vehículo" index={2}>
+          <Field label="Tipo de vehículo" htmlFor="tipoVehiculo">
+            <TextInput
+              id="tipoVehiculo"
+              {...register("tipoVehiculo")}
+              placeholder="Ej: Auto, Moto, Camioneta"
+            />
+          </Field>
+
+          <Field label="Año de compra" htmlFor="anioCompra">
+            <TextInput
+              id="anioCompra"
+              {...register("anioCompra")}
+              type="number"
+              min="1900"
+              max="2100"
+              placeholder="2023"
+            />
+          </Field>
+
+          <Field label="Marca" htmlFor="marca">
+            <TextInput id="marca" {...register("marca")} placeholder="Ej: Toyota, Ford, Honda" />
+          </Field>
+
+          <Field label="Modelo" htmlFor="modelo">
+            <TextInput id="modelo" {...register("modelo")} placeholder="Ej: Corolla, Focus, Civic" />
+          </Field>
+
+          <Field label="Tipo de cliente" htmlFor="tipoCliente">
+            <SelectField id="tipoCliente" {...register("tipoCliente")}>
+              <option value="">Seleccionar tipo...</option>
+              <option value="Comprador">Comprador</option>
+              <option value="Vendedor">Vendedor</option>
+              <option value="Consultor">Consultor</option>
+            </SelectField>
+          </Field>
+
+          <Field label="Observaciones" htmlFor="observaciones" className="md:col-span-2">
+            <TextareaField
+              id="observaciones"
+              {...register("observaciones")}
+              placeholder="Notas adicionales sobre el cliente..."
+              rows={3}
+            />
+          </Field>
+
+          <div className="col-span-full flex flex-col gap-3 border-t border-gray-100 pt-6 sm:flex-row">
+            <AdminButton
+              variant="primary"
+              icon={CheckCircle}
+              className="flex-1"
+              disabled={isLoading || isSubmitting}
+              onClick={handleSubmit(onSubmit)}
+            >
+              {isLoading ? "Actualizando…" : "Guardar cambios"}
+            </AdminButton>
+
+            <AdminButton
+              variant="secondary"
+              icon={X}
+              className="flex-1"
+              disabled={isLoading || isSubmitting}
+              onClick={handleCancel}
+            >
+              Cancelar
+            </AdminButton>
           </div>
-        </CardContent>
-      </Card>
+        </FormSection>
+      </FormShell>
     </div>
   );
 }

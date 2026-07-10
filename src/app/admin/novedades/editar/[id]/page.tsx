@@ -1,30 +1,39 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useRef, useState, useEffect } from "react";
 import {
-  Newspaper,
-  ArrowLeft,
-  Upload,
-  X,
-  Save,
   AlertCircle,
-  CheckCircle,
-  Image as ImageIcon,
-  Star,
-  Calendar,
-  Tag,
-  Trash2,
-  Loader,
-  Link as LinkIcon,
   ExternalLink,
+  Loader2,
   Plus,
+  Save,
+  Trash2,
+  X,
 } from "lucide-react";
-import Link from "next/link";
 import { useRouter, useParams } from "next/navigation";
-import Image from "next/image";
 import { novedadService } from "@/services";
 import { useNovedadOptions } from "@/hooks";
 import type { Novedad, UpdateNovedadDto, NovedadLink } from "@/types";
+import {
+  AdminButton,
+  Badge,
+  Breadcrumb,
+  ConfirmDialog,
+  DraftBanner,
+  Field,
+  FormSection,
+  FormShell,
+  mapApiError,
+  MediaUploadZone,
+  type MediaPreview,
+  SelectField,
+  SwitchField,
+  TextareaField,
+  TextInput,
+  useFormDraft,
+  useToast,
+  useUnsavedGuard,
+} from "@/components/admin/kit";
 
 interface FormData {
   titulo: string;
@@ -50,29 +59,38 @@ interface FormErrors {
   [key: string]: string;
 }
 
+const INITIAL_FORM_DATA: FormData = {
+  titulo: "",
+  contenido: "",
+  resumen: "",
+  categoria: "",
+  destacada: false,
+  fechaPublicacion: new Date().toISOString().split("T")[0],
+};
+
+type DraftShape = {
+  formData: FormData;
+  links: NovedadLink[];
+};
+
 export default function EditarNovedadPage() {
   const router = useRouter();
   const params = useParams();
   const novedadId = params.id as string;
   const { categorias } = useNovedadOptions();
+  const { showToast } = useToast();
 
   // Estados de la novedad existente
   const [novedad, setNovedad] = useState<Novedad | null>(null);
   const [loadingNovedad, setLoadingNovedad] = useState(true);
 
   // Estados del formulario
-  const [formData, setFormData] = useState<FormData>({
-    titulo: "",
-    contenido: "",
-    resumen: "",
-    categoria: "",
-    destacada: false,
-    fechaPublicacion: new Date().toISOString().split("T")[0],
-  });
+  const [formData, setFormData] = useState<FormData>(INITIAL_FORM_DATA);
 
   // Estados de archivos
   const [newImageFiles, setNewImageFiles] = useState<FilePreview[]>([]);
   const [deletingImageIds, setDeletingImageIds] = useState<string[]>([]);
+  const [imageToDelete, setImageToDelete] = useState<string | null>(null);
 
   // Estados de links
   const [links, setLinks] = useState<NovedadLink[]>([]);
@@ -89,6 +107,25 @@ export default function EditarNovedadPage() {
   const [success, setSuccess] = useState(false);
   const [showCategoriaInput, setShowCategoriaInput] = useState(false);
   const [nuevaCategoria, setNuevaCategoria] = useState("");
+
+  // Borrador (elderly-first: nunca perder una edición a mitad de hacer)
+  const { hasDraft, restoreDraft, dismissDraft, clearDraft } =
+    useFormDraft<DraftShape>(
+      `novedad-editar-${novedadId}`,
+      { formData, links },
+      (draft) => {
+        setFormData(draft.formData ?? INITIAL_FORM_DATA);
+        setLinks(draft.links ?? []);
+      },
+    );
+
+  const initialSnapshotRef = useRef<string>("");
+  const isDirty =
+    initialSnapshotRef.current !== "" &&
+    (JSON.stringify(formData) !== initialSnapshotRef.current ||
+      newImageFiles.length > 0);
+
+  useUnsavedGuard(isDirty);
 
   // Cargar datos de la novedad
   useEffect(() => {
@@ -114,8 +151,7 @@ export default function EditarNovedadPage() {
 
       setNovedad(novedadEncontrada);
 
-      // Llenar formulario con datos existentes
-      setFormData({
+      const loadedFormData: FormData = {
         titulo: novedadEncontrada.titulo,
         contenido: novedadEncontrada.contenido,
         resumen: novedadEncontrada.resumen || "",
@@ -124,9 +160,11 @@ export default function EditarNovedadPage() {
         fechaPublicacion: new Date(novedadEncontrada.fechaPublicacion)
           .toISOString()
           .split("T")[0],
-      });
+      };
 
-      // Cargar links existentes
+      setFormData(loadedFormData);
+      initialSnapshotRef.current = JSON.stringify(loadedFormData);
+
       if (novedadEncontrada.links && novedadEncontrada.links.length > 0) {
         setLinks(novedadEncontrada.links);
       }
@@ -186,16 +224,8 @@ export default function EditarNovedadPage() {
     }
   };
 
-  // Manejar cambios en checkbox
-  const handleCheckboxChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, checked } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: checked }));
-  };
-
-  // Manejar selección de nuevas imágenes
-  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
-
+  // Manejar selección de nuevas imágenes — adaptador: MediaUploadZone entrega File[] ya comprimidos.
+  const handleImageFilesSelected = (files: File[]) => {
     const totalImages =
       (novedad?.imagenes.length || 0) -
       deletingImageIds.length +
@@ -203,7 +233,10 @@ export default function EditarNovedadPage() {
       files.length;
 
     if (totalImages > 10) {
-      alert("Máximo 10 imágenes permitidas en total");
+      setErrors((prev) => ({
+        ...prev,
+        imagenes: "Máximo 10 imágenes permitidas en total",
+      }));
       return;
     }
 
@@ -228,17 +261,12 @@ export default function EditarNovedadPage() {
     });
   };
 
-  // Eliminar imagen existente
+  // Eliminar imagen existente (confirmada vía ConfirmDialog)
   const handleDeleteExistingImage = async (publicId: string) => {
-    if (!confirm("¿Eliminar esta imagen permanentemente?")) {
-      return;
-    }
-
     try {
       setDeletingImageIds((prev) => [...prev, publicId]);
       await novedadService.admin.deleteImage(novedadId, publicId);
 
-      // Actualizar estado local
       if (novedad) {
         setNovedad({
           ...novedad,
@@ -248,10 +276,15 @@ export default function EditarNovedadPage() {
         });
       }
 
+      showToast({ message: "La imagen se eliminó correctamente.", variant: "success" });
       setDeletingImageIds((prev) => prev.filter((id) => id !== publicId));
     } catch (err) {
       console.error("Error eliminando imagen:", err);
-      alert("Error al eliminar la imagen");
+      showToast({
+        title: "No se pudo eliminar la imagen",
+        message: mapApiError(err),
+        variant: "danger",
+      });
       setDeletingImageIds((prev) => prev.filter((id) => id !== publicId));
     }
   };
@@ -276,15 +309,22 @@ export default function EditarNovedadPage() {
   // Agregar link a la lista
   const handleAddLink = () => {
     if (!currentLink.titulo.trim() || !currentLink.url.trim()) {
-      alert("El título y la URL son requeridos");
+      showToast({
+        title: "Faltan datos del enlace",
+        message: "El título y la URL son requeridos.",
+        variant: "warn",
+      });
       return;
     }
 
-    // Validar URL
     try {
       new URL(currentLink.url);
     } catch {
-      alert("Por favor ingresa una URL válida");
+      showToast({
+        title: "URL inválida",
+        message: "Por favor ingresá una URL válida (ej: https://ejemplo.com).",
+        variant: "warn",
+      });
       return;
     }
 
@@ -322,7 +362,7 @@ export default function EditarNovedadPage() {
         categoria: formData.categoria.trim() || undefined,
         destacada: formData.destacada,
         fechaPublicacion: new Date(formData.fechaPublicacion).toISOString(),
-        links: links.length > 0 ? links : undefined, // ← NUEVO: Incluir links
+        links: links.length > 0 ? links : undefined,
       };
 
       const newImages = newImageFiles.map((preview) => preview.file);
@@ -331,18 +371,24 @@ export default function EditarNovedadPage() {
 
       setSuccess(true);
 
-      // Limpiar URLs de objeto
       newImageFiles.forEach((preview) => URL.revokeObjectURL(preview.url));
 
-      // Redirigir después de 1 segundo
+      clearDraft();
+      showToast({
+        message: "Los cambios se guardaron correctamente.",
+        variant: "success",
+      });
+
       setTimeout(() => {
         router.push("/admin/novedades?updated=true");
       }, 1000);
     } catch (err: unknown) {
       console.error("Error actualizando novedad:", err);
-      const errorMessage =
-        err instanceof Error ? err.message : "Error al actualizar la novedad";
-      setErrors({ submit: errorMessage });
+      showToast({
+        title: "No se pudo guardar la novedad",
+        message: mapApiError(err),
+        variant: "danger",
+      });
     } finally {
       setLoading(false);
     }
@@ -351,10 +397,10 @@ export default function EditarNovedadPage() {
   // Loading inicial
   if (loadingNovedad) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-cyan-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Cargando novedad...</p>
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <div className="flex items-center gap-3 text-[17px] text-gray-500">
+          <Loader2 className="size-6 animate-spin text-gray-400" strokeWidth={2} aria-hidden />
+          Cargando novedad...
         </div>
       </div>
     );
@@ -363,17 +409,13 @@ export default function EditarNovedadPage() {
   // Error al cargar
   if (errors.load) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <AlertCircle className="h-16 w-16 text-red-500 mx-auto mb-4" />
-          <h2 className="text-xl font-semibold text-gray-800 mb-2">Error</h2>
-          <p className="text-gray-600 mb-4">{errors.load}</p>
-          <Link
-            href="/admin/novedades"
-            className="px-4 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700"
-          >
-            Volver al dashboard
-          </Link>
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <div className="max-w-md space-y-4 rounded-2xl border border-gray-100 bg-white p-6 text-center shadow-sm">
+          <h2 className="text-[20px] font-bold text-gray-900">No pudimos cargar la novedad</h2>
+          <p className="text-[17px] text-gray-500">{errors.load}</p>
+          <AdminButton variant="primary" href="/admin/novedades">
+            Volver a novedades
+          </AdminButton>
         </div>
       </div>
     );
@@ -383,176 +425,115 @@ export default function EditarNovedadPage() {
     return null;
   }
 
+  const existingPreviews: MediaPreview[] = novedad.imagenes.map((img) => ({
+    id: img.public_id,
+    url: img.thumbnails?.medium || img.secure_url,
+    type: "image",
+  }));
+
+  const newPreviews: MediaPreview[] = newImageFiles.map((f, idx) => ({
+    id: String(idx),
+    url: f.url,
+    type: "image",
+  }));
+
   return (
-    <div className="p-6 max-w-5xl mx-auto">
-      {/* Header */}
-      <div className="mb-6">
-        <Link
-          href="/admin/novedades"
-          className="inline-flex items-center gap-2 text-cyan-600 hover:text-cyan-700 mb-4"
+    <div className="space-y-8">
+      <Breadcrumb
+        items={[
+          { label: "Novedades", href: "/admin/novedades" },
+          { label: "Editar novedad" },
+        ]}
+      />
+
+      {hasDraft ? (
+        <DraftBanner onRestore={restoreDraft} onDismiss={dismissDraft} />
+      ) : null}
+
+      {novedad.deleted ? (
+        <div className="flex items-center gap-2">
+          <Badge variant="danger">Eliminada</Badge>
+          <span className="text-[16px] text-gray-500">
+            Esta novedad está en la papelera. Podés restaurarla desde la lista de eliminadas.
+          </span>
+        </div>
+      ) : null}
+
+      <form onSubmit={handleSubmit}>
+        <FormShell
+          title="Editar novedad"
+          description="Modificá la información, las imágenes y los enlaces. Los campos con * son obligatorios."
         >
-          <ArrowLeft className="h-4 w-4" />
-          Volver al dashboard
-        </Link>
-
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-cyan-100 rounded-lg flex items-center justify-center">
-              <Newspaper className="h-6 w-6 text-cyan-600" />
-            </div>
-            <div>
-              <h1 className="text-3xl font-bold text-gray-800">
-                Editar Novedad
-              </h1>
-              <p className="text-gray-600 mt-1">
-                Modifica la información y las imágenes
-              </p>
-            </div>
-          </div>
-
-          {/* Badge de estado */}
-          {novedad.deleted && (
-            <span className="inline-flex items-center gap-1 px-3 py-1 bg-red-100 text-red-700 text-sm font-medium rounded">
-              <Trash2 className="h-4 w-4" />
-              Eliminada
-            </span>
-          )}
-        </div>
-      </div>
-
-      {/* Mensaje de éxito */}
-      {success && (
-        <div className="mb-6 bg-green-50 border border-green-200 rounded-lg p-4 flex items-start gap-3">
-          <CheckCircle className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
-          <div>
-            <h4 className="text-green-800 font-medium">
-              ¡Novedad actualizada exitosamente!
-            </h4>
-            <p className="text-green-700 text-sm mt-1">
-              Redirigiendo al dashboard...
-            </p>
-          </div>
-        </div>
-      )}
-
-      {/* Error general */}
-      {errors.submit && (
-        <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3">
-          <AlertCircle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
-          <div>
-            <h4 className="text-red-800 font-medium">Error</h4>
-            <p className="text-red-700 text-sm mt-1">{errors.submit}</p>
-          </div>
-        </div>
-      )}
-
-      {/* Formulario */}
-      <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Información Básica */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <h2 className="text-xl font-semibold text-gray-800 mb-4 flex items-center gap-2">
-            <Tag className="h-5 w-5" />
-            Información Básica
-          </h2>
-
-          <div className="space-y-4">
-            {/* Título */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Título <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
+          <FormSection title="Información básica">
+            <Field
+              label="Título"
+              htmlFor="titulo"
+              required
+              error={errors.titulo}
+              hint={`${formData.titulo.length}/200`}
+              className="md:col-span-2"
+            >
+              <TextInput
+                id="titulo"
                 name="titulo"
                 value={formData.titulo}
                 onChange={handleInputChange}
                 maxLength={200}
-                className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent ${
-                  errors.titulo ? "border-red-500" : "border-gray-300"
-                }`}
                 placeholder="Ej: Nuevo Modelo de Camión Disponible"
+                invalid={Boolean(errors.titulo)}
               />
-              <div className="flex justify-between mt-1">
-                {errors.titulo && (
-                  <p className="text-red-500 text-sm">{errors.titulo}</p>
-                )}
-                <p className="text-gray-500 text-sm ml-auto">
-                  {formData.titulo.length}/200
-                </p>
-              </div>
-            </div>
+            </Field>
 
-            {/* Resumen */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Resumen
-              </label>
-              <textarea
+            <Field
+              label="Resumen"
+              htmlFor="resumen"
+              error={errors.resumen}
+              hint={
+                errors.resumen ? undefined : `${formData.resumen.length}/500 (opcional)`
+              }
+              className="md:col-span-2"
+            >
+              <TextareaField
+                id="resumen"
                 name="resumen"
                 value={formData.resumen}
                 onChange={handleInputChange}
                 maxLength={500}
                 rows={3}
-                className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent ${
-                  errors.resumen ? "border-red-500" : "border-gray-300"
-                }`}
                 placeholder="Breve resumen de la novedad (opcional)"
+                invalid={Boolean(errors.resumen)}
               />
-              <div className="flex justify-between mt-1">
-                {errors.resumen && (
-                  <p className="text-red-500 text-sm">{errors.resumen}</p>
-                )}
-                <p className="text-gray-500 text-sm ml-auto">
-                  {formData.resumen.length}/500
-                </p>
-              </div>
-            </div>
+            </Field>
 
-            {/* Contenido */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Contenido <span className="text-red-500">*</span>
-              </label>
-              <textarea
+            <Field
+              label="Contenido"
+              htmlFor="contenido"
+              required
+              error={errors.contenido}
+              hint={errors.contenido ? undefined : `${formData.contenido.length} caracteres`}
+              className="md:col-span-2"
+            >
+              <TextareaField
+                id="contenido"
                 name="contenido"
                 value={formData.contenido}
                 onChange={handleInputChange}
                 rows={12}
-                className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent font-mono text-sm ${
-                  errors.contenido ? "border-red-500" : "border-gray-300"
-                }`}
                 placeholder="Contenido completo de la novedad..."
+                invalid={Boolean(errors.contenido)}
               />
-              {errors.contenido && (
-                <p className="text-red-500 text-sm mt-1">{errors.contenido}</p>
-              )}
-              <p className="text-gray-500 text-sm mt-1">
-                {formData.contenido.length} caracteres
-              </p>
-            </div>
-          </div>
-        </div>
+            </Field>
+          </FormSection>
 
-        {/* Categorización y Opciones */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <h2 className="text-xl font-semibold text-gray-800 mb-4 flex items-center gap-2">
-            <Tag className="h-5 w-5" />
-            Categorización y Opciones
-          </h2>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Categoría */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Categoría
-              </label>
+          <FormSection title="Categorización y opciones">
+            <Field label="Categoría" htmlFor="categoria" error={errors.categoria}>
               {!showCategoriaInput ? (
                 <div className="space-y-2">
-                  <select
+                  <SelectField
+                    id="categoria"
                     name="categoria"
                     value={formData.categoria}
                     onChange={handleInputChange}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
                   >
                     <option value="">Sin categoría</option>
                     {categorias.map((cat) => (
@@ -560,23 +541,27 @@ export default function EditarNovedadPage() {
                         {cat}
                       </option>
                     ))}
-                  </select>
+                    {formData.categoria &&
+                      !categorias.includes(formData.categoria) && (
+                        <option value={formData.categoria}>
+                          {formData.categoria} (nueva)
+                        </option>
+                      )}
+                  </SelectField>
                   <button
                     type="button"
                     onClick={() => setShowCategoriaInput(true)}
-                    className="text-sm text-cyan-600 hover:text-cyan-700"
+                    className="text-[16px] font-semibold text-gray-700 transition-colors duration-150 hover:text-gray-900 hover:underline"
                   >
                     + Crear nueva categoría
                   </button>
                 </div>
               ) : (
                 <div className="flex gap-2">
-                  <input
-                    type="text"
+                  <TextInput
                     value={nuevaCategoria}
                     onChange={(e) => setNuevaCategoria(e.target.value)}
                     maxLength={100}
-                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
                     placeholder="Nueva categoría"
                     onKeyDown={(e) => {
                       if (e.key === "Enter") {
@@ -585,350 +570,256 @@ export default function EditarNovedadPage() {
                       }
                     }}
                   />
-                  <button
-                    type="button"
-                    onClick={handleAddCategoria}
-                    className="px-4 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700"
-                  >
+                  <AdminButton variant="primary" onClick={handleAddCategoria}>
                     Agregar
-                  </button>
-                  <button
-                    type="button"
+                  </AdminButton>
+                  <AdminButton
+                    variant="secondary"
+                    icon={X}
+                    ariaLabel="Cancelar nueva categoría"
                     onClick={() => {
                       setShowCategoriaInput(false);
                       setNuevaCategoria("");
                     }}
-                    className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
-              )}
-            </div>
-
-            {/* Fecha de Publicación */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Fecha de Publicación
-              </label>
-              <div className="relative">
-                <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
-                <input
-                  type="date"
-                  name="fechaPublicacion"
-                  value={formData.fechaPublicacion}
-                  onChange={handleInputChange}
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
-                />
-              </div>
-            </div>
-
-            {/* Destacada */}
-            <div className="flex items-center gap-3 p-4 border border-gray-200 rounded-lg">
-              <input
-                type="checkbox"
-                id="destacada"
-                name="destacada"
-                checked={formData.destacada}
-                onChange={handleCheckboxChange}
-                className="w-5 h-5 text-yellow-600 border-gray-300 rounded focus:ring-yellow-500"
-              />
-              <label
-                htmlFor="destacada"
-                className="flex items-center gap-2 cursor-pointer"
-              >
-                <Star className="h-5 w-5 text-yellow-600" />
-                <div>
-                  <p className="text-sm font-medium text-gray-700">
-                    Marcar como destacada
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    Aparecerá en la portada principal
-                  </p>
-                </div>
-              </label>
-            </div>
-          </div>
-        </div>
-
-        {/* Imágenes Existentes */}
-        {novedad.imagenes && novedad.imagenes.length > 0 && (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <h2 className="text-xl font-semibold text-gray-800 mb-4 flex items-center gap-2">
-              <ImageIcon className="h-5 w-5" />
-              Imágenes Existentes ({novedad.imagenes.length})
-            </h2>
-
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-              {novedad.imagenes.map((imagen, index) => (
-                <div key={imagen.public_id} className="relative group">
-                  <Image
-                    src={imagen.thumbnails?.medium || imagen.secure_url}
-                    alt={`Imagen ${index + 1}`}
-                    width={200}
-                    height={200}
-                    className="w-full h-40 object-cover rounded-lg border border-gray-200"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => handleDeleteExistingImage(imagen.public_id)}
-                    disabled={deletingImageIds.includes(imagen.public_id)}
-                    className="absolute top-2 right-2 p-1 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600 disabled:opacity-50"
-                  >
-                    {deletingImageIds.includes(imagen.public_id) ? (
-                      <Loader className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <X className="h-4 w-4" />
-                    )}
-                  </button>
-                  <div className="absolute bottom-2 left-2 px-2 py-1 bg-black bg-opacity-60 text-white text-xs rounded">
-                    Imagen {index + 1}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Nuevas Imágenes */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <h2 className="text-xl font-semibold text-gray-800 mb-4 flex items-center gap-2">
-            <ImageIcon className="h-5 w-5" />
-            Agregar Nuevas Imágenes
-          </h2>
-
-          <div className="mb-4">
-            <label className="cursor-pointer">
-              <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-cyan-500 hover:bg-cyan-50 transition-colors">
-                <Upload className="h-12 w-12 text-gray-400 mx-auto mb-3" />
-                <p className="text-gray-600 font-medium mb-1">
-                  Click para seleccionar imágenes
-                </p>
-                <p className="text-gray-500 text-sm">
-                  PNG, JPG, WEBP (máximo 10 imágenes en total)
-                </p>
-              </div>
-              <input
-                type="file"
-                accept="image/*"
-                multiple
-                onChange={handleImageSelect}
-                className="hidden"
-              />
-            </label>
-            {errors.imagenes && (
-              <p className="text-red-500 text-sm mt-2">{errors.imagenes}</p>
-            )}
-          </div>
-
-          {newImageFiles.length > 0 && (
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-              {newImageFiles.map((preview, index) => (
-                <div key={index} className="relative group">
-                  <Image
-                    src={preview.url}
-                    alt={`Nueva imagen ${index + 1}`}
-                    width={200}
-                    height={200}
-                    className="w-full h-40 object-cover rounded-lg border border-gray-200"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => removeNewImage(index)}
-                    className="absolute top-2 right-2 p-1 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                  <div className="absolute bottom-2 left-2 px-2 py-1 bg-green-600 text-white text-xs rounded">
-                    Nueva {index + 1}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {newImageFiles.length === 0 && (
-            <div className="text-center py-8 text-gray-500">
-              <ImageIcon className="h-12 w-12 text-gray-300 mx-auto mb-2" />
-              <p>No hay nuevas imágenes para agregar</p>
-            </div>
-          )}
-        </div>
-
-        {/* Enlaces/Links Externos */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold text-gray-800 flex items-center gap-2">
-              <LinkIcon className="h-5 w-5" />
-              Enlaces Externos
-            </h2>
-            <button
-              type="button"
-              onClick={() => setShowLinkForm(!showLinkForm)}
-              className="px-4 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 transition-colors flex items-center gap-2"
-            >
-              <Plus className="h-4 w-4" />
-              Agregar Enlace
-            </button>
-          </div>
-
-          <p className="text-sm text-gray-600 mb-4">
-            Agrega enlaces a formularios, documentos, videos, páginas web, etc.
-          </p>
-
-          {/* Formulario para agregar link */}
-          {showLinkForm && (
-            <div className="mb-6 p-4 border border-gray-200 rounded-lg bg-gray-50">
-              <h3 className="font-medium text-gray-800 mb-3">Nuevo Enlace</h3>
-              <div className="space-y-3">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Título del Enlace <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    name="titulo"
-                    value={currentLink.titulo}
-                    onChange={handleLinkInputChange}
-                    maxLength={200}
-                    placeholder="Ej: Formulario de Contacto"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
-                  />
-                  <p className="text-gray-500 text-xs mt-1">
-                    {currentLink.titulo.length}/200
-                  </p>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    URL <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="url"
-                    name="url"
-                    value={currentLink.url}
-                    onChange={handleLinkInputChange}
-                    placeholder="https://ejemplo.com/formulario"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Descripción (Opcional)
-                  </label>
-                  <textarea
-                    name="descripcion"
-                    value={currentLink.descripcion}
-                    onChange={handleLinkInputChange}
-                    maxLength={500}
-                    rows={2}
-                    placeholder="Descripción breve del enlace..."
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
-                  />
-                  <p className="text-gray-500 text-xs mt-1">
-                    {currentLink.descripcion.length}/500
-                  </p>
-                </div>
-
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={handleAddLink}
-                    className="px-4 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 transition-colors"
-                  >
-                    Agregar
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowLinkForm(false);
-                      setCurrentLink({ titulo: "", url: "", descripcion: "" });
-                    }}
-                    className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
                   >
                     Cancelar
-                  </button>
+                  </AdminButton>
                 </div>
-              </div>
-            </div>
-          )}
+              )}
+            </Field>
 
-          {/* Lista de links agregados */}
-          {links.length > 0 ? (
-            <div className="space-y-3">
-              {links.map((link, index) => (
-                <div
-                  key={index}
-                  className="flex items-start gap-3 p-4 border border-gray-200 rounded-lg hover:border-cyan-300 transition-colors"
-                >
-                  <ExternalLink className="h-5 w-5 text-cyan-600 flex-shrink-0 mt-0.5" />
-                  <div className="flex-1 min-w-0">
-                    <h4 className="font-medium text-gray-800">{link.titulo}</h4>
-                    <a
-                      href={link.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-cyan-600 hover:text-cyan-700 text-sm break-all"
+            <Field label="Fecha de publicación" htmlFor="fechaPublicacion">
+              <TextInput
+                id="fechaPublicacion"
+                name="fechaPublicacion"
+                type="date"
+                value={formData.fechaPublicacion}
+                onChange={handleInputChange}
+              />
+            </Field>
+
+            <Field
+              label="Destacada"
+              hint="Aparecerá en la portada principal del sitio."
+              className="md:col-span-2"
+            >
+              <SwitchField
+                checked={formData.destacada}
+                onChange={(checked) =>
+                  setFormData((prev) => ({ ...prev, destacada: checked }))
+                }
+                label={formData.destacada ? "Marcada como destacada" : "No destacada"}
+              />
+            </Field>
+          </FormSection>
+
+          <FormSection title="Imágenes existentes">
+            <div className="col-span-full space-y-2">
+              {existingPreviews.length > 0 ? (
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+                  {existingPreviews.map((preview, index) => (
+                    <div
+                      key={preview.id}
+                      className="relative aspect-square overflow-hidden rounded-xl border border-gray-100 bg-gray-50"
                     >
-                      {link.url}
-                    </a>
-                    {link.descripcion && (
-                      <p className="text-gray-600 text-sm mt-1">
-                        {link.descripcion}
-                      </p>
-                    )}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => removeLink(index)}
-                    className="p-1 text-red-600 hover:bg-red-50 rounded transition-colors flex-shrink-0"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={preview.url} alt="" className="size-full object-cover" />
+                      <span className="absolute left-1.5 top-1.5 inline-flex items-center rounded-full border border-gray-200 bg-white/95 px-2.5 py-0.5 text-[13px] font-medium text-gray-700">
+                        {String(index + 1).padStart(2, "0")}
+                      </span>
+                      <AdminButton
+                        variant="danger"
+                        icon={deletingImageIds.includes(preview.id) ? Loader2 : Trash2}
+                        className={
+                          "absolute right-1.5 top-1.5 h-9 border border-red-100 bg-red-50 px-2.5 text-[15px] text-red-600 hover:bg-red-100 " +
+                          (deletingImageIds.includes(preview.id) ? "[&_svg]:animate-spin" : "")
+                        }
+                        disabled={deletingImageIds.includes(preview.id)}
+                        onClick={() => setImageToDelete(preview.id)}
+                        ariaLabel={`Eliminar imagen ${index + 1}`}
+                      >
+                        Quitar
+                      </AdminButton>
+                    </div>
+                  ))}
                 </div>
-              ))}
+              ) : (
+                <p className="text-[16px] text-gray-500">Esta novedad no tiene imágenes cargadas.</p>
+              )}
             </div>
-          ) : (
-            <div className="text-center py-8 text-gray-500">
-              <LinkIcon className="h-12 w-12 text-gray-300 mx-auto mb-2" />
-              <p>No hay enlaces agregados</p>
-              <p className="text-sm mt-1">
-                Los enlaces aparecerán en la novedad para que los usuarios
-                puedan acceder rápidamente
-              </p>
+          </FormSection>
+
+          <FormSection title="Agregar nuevas imágenes">
+            <div className="col-span-full space-y-2">
+              <span className="text-[16px] font-semibold text-gray-800">
+                Nuevas imágenes ({newImageFiles.length})
+              </span>
+              <MediaUploadZone
+                previews={newPreviews}
+                onFilesSelected={handleImageFilesSelected}
+                onRemove={(id) => removeNewImage(Number(id))}
+                max={10}
+                acceptedTypes={["image/jpeg", "image/png", "image/webp"]}
+                maxSizeMB={15}
+                instruccion="Arrastrá las fotos acá o hacé clic — JPG, PNG o WEBP, máximo 15 MB cada una (10 en total)"
+              />
+              {errors.imagenes ? (
+                <span className="flex items-start gap-1.5 text-[15px] font-medium text-red-600">
+                  <AlertCircle className="mt-0.5 size-4 shrink-0" strokeWidth={2} aria-hidden />
+                  {errors.imagenes}
+                </span>
+              ) : null}
             </div>
-          )}
-        </div>
+          </FormSection>
 
-        {/* Botones de acción */}
-        <div className="flex items-center justify-between gap-4 bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <Link
-            href="/admin/novedades"
-            className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-          >
-            Cancelar
-          </Link>
+          <FormSection title="Enlaces externos">
+            <div className="col-span-full space-y-4">
+              <div className="flex items-center justify-between gap-4">
+                <p className="text-[16px] text-gray-500">
+                  Agregá enlaces a formularios, documentos, videos, páginas web, etc.
+                </p>
+                <AdminButton
+                  variant="primary"
+                  icon={Plus}
+                  onClick={() => setShowLinkForm((v) => !v)}
+                >
+                  Agregar enlace
+                </AdminButton>
+              </div>
 
-          <button
-            type="submit"
-            disabled={loading || success}
-            className="px-6 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-          >
-            {loading ? (
-              <>
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                Actualizando...
-              </>
-            ) : (
-              <>
-                <Save className="h-4 w-4" />
-                Guardar Cambios
-              </>
-            )}
-          </button>
-        </div>
+              {showLinkForm ? (
+                <div className="grid gap-4 rounded-xl border border-gray-100 bg-gray-50 p-4 md:grid-cols-2">
+                  <Field
+                    label="Título del enlace"
+                    htmlFor="link-titulo"
+                    required
+                    hint={`${currentLink.titulo.length}/200`}
+                    className="md:col-span-2"
+                  >
+                    <TextInput
+                      id="link-titulo"
+                      name="titulo"
+                      value={currentLink.titulo}
+                      onChange={handleLinkInputChange}
+                      maxLength={200}
+                      placeholder="Ej: Formulario de Contacto"
+                    />
+                  </Field>
+
+                  <Field label="URL" htmlFor="link-url" required className="md:col-span-2">
+                    <TextInput
+                      id="link-url"
+                      name="url"
+                      type="url"
+                      value={currentLink.url}
+                      onChange={handleLinkInputChange}
+                      placeholder="https://ejemplo.com/formulario"
+                    />
+                  </Field>
+
+                  <Field
+                    label="Descripción (opcional)"
+                    htmlFor="link-descripcion"
+                    hint={`${currentLink.descripcion.length}/500`}
+                    className="md:col-span-2"
+                  >
+                    <TextareaField
+                      id="link-descripcion"
+                      name="descripcion"
+                      value={currentLink.descripcion}
+                      onChange={handleLinkInputChange}
+                      maxLength={500}
+                      rows={2}
+                      placeholder="Descripción breve del enlace..."
+                    />
+                  </Field>
+
+                  <div className="flex gap-3 md:col-span-2">
+                    <AdminButton variant="primary" onClick={handleAddLink}>
+                      Agregar
+                    </AdminButton>
+                    <AdminButton
+                      variant="secondary"
+                      onClick={() => {
+                        setShowLinkForm(false);
+                        setCurrentLink({ titulo: "", url: "", descripcion: "" });
+                      }}
+                    >
+                      Cancelar
+                    </AdminButton>
+                  </div>
+                </div>
+              ) : null}
+
+              {links.length > 0 ? (
+                <div className="space-y-3">
+                  {links.map((link, index) => (
+                    <div
+                      key={index}
+                      className="flex items-start justify-between gap-4 rounded-xl border border-gray-100 bg-white p-4"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="font-semibold text-gray-900">{link.titulo}</p>
+                        <a
+                          href={link.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 break-all text-[16px] text-gray-700 hover:text-gray-900 hover:underline"
+                        >
+                          <ExternalLink className="size-4 shrink-0" strokeWidth={2} aria-hidden />
+                          {link.url}
+                        </a>
+                        {link.descripcion ? (
+                          <p className="mt-1 text-[16px] text-gray-500">{link.descripcion}</p>
+                        ) : null}
+                      </div>
+                      <AdminButton
+                        variant="danger"
+                        icon={X}
+                        className="h-10 border border-red-100 bg-red-50 px-4 text-[15px] text-red-600 hover:bg-red-100"
+                        onClick={() => removeLink(index)}
+                        ariaLabel={`Quitar enlace ${link.titulo}`}
+                      >
+                        Quitar
+                      </AdminButton>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-[16px] text-gray-500">
+                  No hay enlaces agregados. Los enlaces aparecerán en la novedad para
+                  que los usuarios puedan acceder rápidamente.
+                </p>
+              )}
+            </div>
+          </FormSection>
+
+          <div className="col-span-full flex justify-end gap-3 border-t border-gray-100 pt-6">
+            <AdminButton variant="secondary" href="/admin/novedades">
+              Cancelar
+            </AdminButton>
+            <AdminButton
+              type="submit"
+              variant="primary"
+              icon={loading ? Loader2 : Save}
+              disabled={loading || success}
+              className={loading ? "[&_svg]:animate-spin" : undefined}
+            >
+              {loading ? "Guardando cambios..." : "Guardar cambios"}
+            </AdminButton>
+          </div>
+        </FormShell>
       </form>
+
+      <ConfirmDialog
+        open={imageToDelete !== null}
+        onClose={() => setImageToDelete(null)}
+        onConfirm={() => imageToDelete && handleDeleteExistingImage(imageToDelete)}
+        title="Eliminar imagen"
+        message="¿Eliminar esta imagen? Esta acción no se puede deshacer."
+        confirmLabel="Eliminar"
+        danger
+      />
     </div>
   );
 }

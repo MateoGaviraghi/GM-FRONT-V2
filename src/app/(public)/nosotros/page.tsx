@@ -1,458 +1,726 @@
-import {
-  Users,
-  Truck,
-  Clock,
-  MapPin,
-  Calendar,
-  Building2,
-  Star,
-} from "lucide-react";
+"use client";
+
+import { useRef } from "react";
 import Image from "next/image";
+import { Clock, MapPin, Phone, Mail } from "lucide-react";
+import gsap from "gsap";
+import { ScrollTrigger } from "gsap/ScrollTrigger";
+import { SplitText } from "gsap/SplitText";
+import { useGSAP } from "@gsap/react";
+import { SectionHeading } from "@/components/cliente/home/gm/section-heading";
+import { Reveal } from "@/components/cliente/home/gm/reveal";
+import { GmButton } from "@/components/cliente/home/gm/gm-button";
+
+gsap.registerPlugin(ScrollTrigger, SplitText, useGSAP);
+
+/* Cifras del negocio — reubicadas del hero al cierre de la historia (verbatim) */
+const STATS = [
+  { value: "38", suffix: "+", label: "Años de Experiencia" },
+  { value: "1500", suffix: "+", label: "Unidades Vendidas" },
+  { value: "2", suffix: "", label: "Generaciones" },
+  { value: "2019", suffix: "", label: "Guzman Motors SRL" },
+];
+
+type Era = {
+  year: string;
+  range: string;
+  title: string;
+  image: string;
+  caption: string;
+  flip: boolean;
+  items: React.ReactNode[];
+};
+
+const ERAS: Era[] = [
+  {
+    year: "1987",
+    range: "1987 — 1999",
+    title: "Los Inicios",
+    image: "/images/nosotros/equipo guzman motoros.webp",
+    caption: "Héctor y Cristina con su hijo Leonardo",
+    flip: false,
+    items: [
+      <>
+        <strong className="font-semibold text-petrol-deep">1987:</strong>{" "}
+        Héctor Guzmán inicia su actividad en Santo Tomé (Ruta 19 y Bs As),
+        especializándose en acoplados y remolques Astivia, compra-venta y
+        consignación de camiones.
+      </>,
+      <>
+        <strong className="font-semibold text-petrol-deep">1989:</strong>{" "}
+        Traslado al nuevo local propio en{" "}
+        <strong className="font-semibold text-ink-0">
+          Avda. Blas Parera 6422
+        </strong>
+        , Santa Fe.
+      </>,
+      <>
+        Incorporación de camiones{" "}
+        <strong className="font-semibold text-ink-0">Fiat (hoy Iveco)</strong>{" "}
+        como subagentes de{" "}
+        <strong className="font-semibold text-ink-0">
+          Frencia y Rossi de Córdoba
+        </strong>{" "}
+        hasta 1999.
+      </>,
+    ],
+  },
+  {
+    year: "1999",
+    range: "1999 — 2019",
+    title: "Era Volkswagen",
+    image: "/images/nosotros/equipo guzman motros 2.webp",
+    caption: "El equipo en las oficinas de Blas Parera 6422",
+    flip: true,
+    items: [
+      <>
+        <strong className="font-semibold text-petrol-deep">1999:</strong>{" "}
+        Llegada de Volkswagen de camiones y buses al país. Comenzamos como
+        subagentes de{" "}
+        <strong className="font-semibold text-ink-0">Devol SA</strong>{" "}
+        (concesionario oficial).
+      </>,
+      <>
+        <strong className="font-semibold text-petrol-deep">2016:</strong>{" "}
+        Devol SA se traslada a Blas Parera 10800 tras haber vendido{" "}
+        <strong className="font-semibold text-ink-0">
+          más de 1500 unidades
+        </strong>{" "}
+        en la zona.
+      </>,
+      <>
+        <strong className="font-semibold text-petrol-deep">2019:</strong>{" "}
+        Leonardo, con 30 años de experiencia, decide independizarse y reabrir
+        el negocio familiar. Ambos renuncian a Devol SA en abril.
+      </>,
+    ],
+  },
+  {
+    year: "2019",
+    range: "2019 — Presente",
+    title: "Guzman Motors SRL",
+    image: "/images/nosotros/entrada-negocio-gm-motros-nostros.jpg",
+    caption: "Nuestra fachada actual - Guzman Motors SRL",
+    flip: false,
+    items: [
+      <>
+        Nace{" "}
+        <strong className="font-semibold text-ink-0">Guzman Motors SRL</strong>{" "}
+        con Leonardo y Héctor como titulares, regresando al histórico local de
+        Blas Parera 6422.
+      </>,
+      <>
+        Representamos a{" "}
+        <strong className="font-semibold text-ink-0">Red Alcorta</strong> en la
+        venta de acoplados y semirremolques de las marcas:{" "}
+        <strong className="font-semibold text-ink-0">
+          Sola y Brusa, Lambert, Metagro, Aiello y Cormetal
+        </strong>
+        .
+      </>,
+      <>
+        Somos subagentes de{" "}
+        <strong className="font-semibold text-ink-0">LTA Motors</strong> para
+        las marcas{" "}
+        <strong className="font-semibold text-ink-0">Foton y Zanella</strong>.
+      </>,
+    ],
+  },
+];
 
 export default function NosotrosPage() {
+  const heroRef = useRef<HTMLElement>(null);
+  const timelineWrapRef = useRef<HTMLDivElement>(null);
+  const timelineRef = useRef<HTMLDivElement>(null);
+  const lineFillRef = useRef<HTMLSpanElement>(null);
+  const odoRef = useRef<HTMLDivElement>(null);
+  const balanceRef = useRef<HTMLDivElement>(null);
+
+  useGSAP(
+    () => {
+      if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+        return;
+      }
+      const hero = heroRef.current;
+      if (!hero) return;
+
+      const img = hero.querySelector<HTMLElement>("[data-hero-img]");
+      const titleEl = hero.querySelector<HTMLElement>("[data-hero-title]");
+      const twEl = hero.querySelector<HTMLElement>("[data-tw]");
+      const caret = hero.querySelector<HTMLElement>("[data-caret]");
+      const soft = hero.querySelectorAll<HTMLElement>("[data-hero-soft]");
+
+      /* --- SplitText: título en caracteres, eyebrow en caracteres --- */
+      const titleSplit = titleEl
+        ? new SplitText(titleEl, { type: "chars" })
+        : null;
+      const twSplit = twEl ? new SplitText(twEl, { type: "chars" }) : null;
+
+      const tl = gsap.timeline({ defaults: { ease: "power3.out" } });
+
+      /* Entrada del hero: todo arranca casi junto, un punto más pausado */
+
+      /* Foto: entrada limpia (color, sin tratamiento B&N) */
+      if (img) {
+        tl.fromTo(
+          img,
+          { scale: 1.08, autoAlpha: 0.4 },
+          { scale: 1, autoAlpha: 1, duration: 1.7, ease: "power2.out" },
+          0
+        );
+      }
+
+      /* Eyebrow: máquina de escribir + caret parpadeante */
+      if (twSplit) {
+        gsap.set(twSplit.chars, { autoAlpha: 0 });
+        tl.to(
+          twSplit.chars,
+          { autoAlpha: 1, duration: 0.01, stagger: 0.03, ease: "none" },
+          0.2
+        );
+      }
+      if (caret) {
+        gsap.set(caret, { autoAlpha: 1 });
+        tl.to(
+          caret,
+          {
+            autoAlpha: 0,
+            duration: 0.44,
+            repeat: 5,
+            yoyo: true,
+            ease: "steps(1)",
+            onComplete: () => gsap.set(caret, { autoAlpha: 0 }),
+          },
+          1.1
+        );
+      }
+
+      /* Título: cada letra se para desde el piso (drum-flip 3D) */
+      if (titleSplit) {
+        gsap.set(titleSplit.chars, {
+          transformOrigin: "50% 100%",
+          rotationX: -92,
+          autoAlpha: 0,
+        });
+        tl.to(
+          titleSplit.chars,
+          {
+            rotationX: 0,
+            autoAlpha: 1,
+            duration: 1.05,
+            stagger: 0.06,
+            ease: "power4.out",
+          },
+          0.2
+        );
+      }
+
+      /* Sub + botones: entran con el título, no después */
+      if (soft.length) {
+        tl.fromTo(
+          soft,
+          { y: 24, autoAlpha: 0 },
+          { y: 0, autoAlpha: 1, duration: 1, stagger: 0.1 },
+          0.35
+        );
+      }
+
+      /* Parallax suave del hero */
+      if (img) {
+        gsap.to(img, {
+          yPercent: 12,
+          ease: "none",
+          scrollTrigger: {
+            trigger: hero,
+            start: "top top",
+            end: "bottom top",
+            scrub: true,
+          },
+        });
+      }
+
+      /* --- Timeline: trazo que se dibuja --- */
+      const timeline = timelineRef.current;
+      const fill = lineFillRef.current;
+      if (timeline && fill) {
+        gsap.fromTo(
+          fill,
+          { scaleY: 0 },
+          {
+            scaleY: 1,
+            ease: "none",
+            transformOrigin: "top center",
+            scrollTrigger: {
+              trigger: timeline,
+              start: "top 72%",
+              end: "bottom 60%",
+              scrub: 0.6,
+            },
+          }
+        );
+
+        timeline.querySelectorAll<HTMLElement>("[data-era]").forEach((era) => {
+          const body = era.querySelector<HTMLElement>("[data-era-body]");
+          const dot = era.querySelector("[data-era-dot]");
+          if (!body) return;
+
+          if (dot) {
+            ScrollTrigger.create({
+              trigger: body,
+              start: "top 68%",
+              once: true,
+              onEnter: () =>
+                gsap.to(dot, {
+                  backgroundColor: "var(--gm-petrol-deep)",
+                  scale: 1.15,
+                  duration: 0.4,
+                  ease: "power2.out",
+                }),
+            });
+          }
+
+          const ghost = era.querySelector("[data-era-year]");
+          if (ghost) {
+            gsap.fromTo(
+              ghost,
+              { y: 44 },
+              {
+                y: -44,
+                ease: "none",
+                scrollTrigger: {
+                  trigger: body,
+                  start: "top bottom",
+                  end: "bottom top",
+                  scrub: true,
+                },
+              }
+            );
+          }
+        });
+
+        /* --- Odómetro de eras: HUD sticky que rueda al cruzar cada etapa --- */
+        const odo = odoRef.current;
+        if (odo) {
+          const labels = gsap.utils.toArray<HTMLElement>("[data-odo]", odo);
+          gsap.set(labels, { yPercent: 110, autoAlpha: 0 });
+          if (labels[0]) gsap.set(labels[0], { yPercent: 0, autoAlpha: 1 });
+
+          const setActive = (idx: number) => {
+            labels.forEach((l, k) => {
+              gsap.to(l, {
+                yPercent: k === idx ? 0 : k < idx ? -110 : 110,
+                autoAlpha: k === idx ? 1 : 0,
+                duration: 0.5,
+                ease: "power3.inOut",
+                overwrite: true,
+              });
+            });
+          };
+
+          timeline
+            .querySelectorAll<HTMLElement>("[data-era-body]")
+            .forEach((body, i) => {
+              ScrollTrigger.create({
+                trigger: body,
+                start: "top 50%",
+                end: "bottom 50%",
+                onToggle: (self) => self.isActive && setActive(i),
+              });
+            });
+        }
+      }
+
+      /* --- Cierre: las cifras se revelan con wipe (no conteo) --- */
+      const balance = balanceRef.current;
+      if (balance) {
+        const nums = gsap.utils.toArray<HTMLElement>(
+          "[data-balance-num]",
+          balance
+        );
+        gsap.set(nums, { clipPath: "inset(100% 0 0 0)" });
+        gsap.to(nums, {
+          clipPath: "inset(0% 0 0 0)",
+          duration: 0.95,
+          stagger: 0.12,
+          ease: "power4.out",
+          scrollTrigger: { trigger: balance, start: "top 78%", once: true },
+        });
+      }
+
+      return () => {
+        titleSplit?.revert();
+        twSplit?.revert();
+      };
+    },
+    { dependencies: [] }
+  );
+
   return (
-    <div className="min-h-screen bg-slate-50">
-      {/* Hero Section */}
-      <section className="relative text-white py-20 md:py-32 overflow-hidden">
-        {/* Imagen de fondo */}
-        <div className="absolute inset-0">
+    <div className="min-h-screen bg-carbon-0">
+      {/* ============ HERO — "Archivo": B&N que cobra color ============ */}
+      <section
+        ref={heroRef}
+        className="gm-grain relative flex min-h-[calc(100svh-var(--gm-header-h,102px))] flex-col overflow-hidden bg-carbon-0 text-platinum"
+      >
+        <div
+          data-hero-img
+          className="absolute inset-0 will-change-transform"
+          aria-hidden
+        >
           <Image
             src="/images/nosotros/equipo guzman motoros.webp"
-            alt="Equipo Guzman Motors"
+            alt=""
             fill
-            className="object-cover"
             priority
+            sizes="100vw"
+            className="object-cover object-center"
           />
-          {/* Overlay para mejorar la legibilidad del texto */}
-          <div className="absolute inset-0 bg-slate-900/70"></div>
+        </div>
+        {/* Scrim lateral: oscuro a la izquierda (texto legible),
+            la foto respira a la derecha */}
+        <div
+          aria-hidden
+          className="absolute inset-0 z-[2] bg-gradient-to-r from-carbon-0 via-carbon-0/55 to-carbon-0/10"
+        />
+        {/* Anclaje inferior para la transición de sección */}
+        <div
+          aria-hidden
+          className="absolute inset-x-0 bottom-0 z-[2] h-2/5 bg-gradient-to-t from-carbon-0 to-transparent"
+        />
+
+        {/* Marca técnica vertical */}
+        <div
+          aria-hidden
+          className="absolute right-7 top-1/2 z-10 hidden -translate-y-1/2 items-center gap-5 [writing-mode:vertical-rl] xl:flex"
+        >
+          <span className="h-16 w-px bg-line-dark" />
+          <span className="gm-label whitespace-nowrap text-steel">
+            Santa Fe, Argentina
+          </span>
+          <span className="h-16 w-px bg-line-dark" />
         </div>
 
-        {/* Efectos de fondo animados (más sutiles) */}
-        <div className="absolute inset-0">
-          <div className="absolute top-20 left-20 w-72 h-72 bg-blue-500/5 rounded-full blur-3xl animate-pulse"></div>
-          <div className="absolute bottom-20 right-20 w-96 h-96 bg-cyan-500/5 rounded-full blur-3xl animate-pulse delay-700"></div>
-          <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-80 h-80 bg-slate-500/5 rounded-full blur-3xl animate-pulse delay-1000"></div>
-        </div>
-
-        <div className="relative container mx-auto px-4 text-center pt-8">
-          <div className="inline-flex items-center gap-3 bg-white/10 backdrop-blur-sm px-6 py-3 rounded-full mb-6">
-            <Building2 className="w-5 h-5 text-cyan-400" />
-            <span className="text-cyan-200 font-medium">Desde 1987</span>
+        <div className="relative z-10 mx-auto flex w-full max-w-[1480px] flex-1 flex-col justify-center px-5 py-16 sm:px-8 lg:px-12">
+          <div className="mb-8 flex items-center gap-4">
+            <span className="gm-plus text-petrol-bright" aria-hidden />
+            <span className="gm-label flex items-center text-silver">
+              <span data-tw aria-label="Desde 1987 — Santa Fe, Argentina">
+                Desde 1987 — Santa Fe, Argentina
+              </span>
+              <span
+                data-caret
+                aria-hidden
+                className="ml-1 inline-block text-petrol-bright opacity-0"
+              >
+                |
+              </span>
+            </span>
           </div>
 
-          <h1 className="text-3xl md:text-5xl font-bold mb-4 bg-gradient-to-r from-white via-cyan-200 to-blue-200 bg-clip-text text-transparent">
-            NOSOTROS
+          <h1
+            data-hero-title
+            aria-label="Nosotros"
+            className="gm-display text-[clamp(2.6rem,11vw,8rem)] leading-[0.97] tracking-[-0.015em]"
+            style={{ perspective: "900px" }}
+          >
+            Nosotros
           </h1>
-          <p className="text-lg md:text-xl text-slate-200 max-w-3xl mx-auto leading-relaxed mb-10">
+
+          <p
+            data-hero-soft
+            className="mt-8 max-w-2xl text-lg leading-relaxed text-silver sm:text-xl"
+          >
             Más de 35 años de experiencia en el sector automotriz comercial,
             construyendo confianza y excelencia en cada operación
           </p>
 
-          {/* Estadísticas rápidas */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6 max-w-4xl mx-auto">
-            <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 hover:bg-white/20 transition-all duration-300">
-              <div className="text-3xl font-bold text-cyan-400 mb-2">38+</div>
-              <div className="text-sm text-slate-300">Años de Experiencia</div>
-            </div>
-            <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 hover:bg-white/20 transition-all duration-300">
-              <div className="text-3xl font-bold text-blue-400 mb-2">1500+</div>
-              <div className="text-sm text-slate-300">Unidades Vendidas</div>
-            </div>
-            <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 hover:bg-white/20 transition-all duration-300">
-              <div className="text-3xl font-bold text-green-400 mb-2">2</div>
-              <div className="text-sm text-slate-300">Generaciones</div>
-            </div>
-            <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 hover:bg-white/20 transition-all duration-300">
-              <div className="text-3xl font-bold text-teal-400 mb-2">2019</div>
-              <div className="text-sm text-slate-300">Guzman Motors SRL</div>
-            </div>
+          <div
+            data-hero-soft
+            className="mt-10 flex flex-wrap items-center gap-4"
+          >
+            <GmButton href="/contacto" tone="solidLight">
+              Contactanos
+            </GmButton>
+            <GmButton href="/foton" tone="outlineDark">
+              Ver Vehículos
+            </GmButton>
           </div>
         </div>
       </section>
 
-      {/* Nuestra Historia - Timeline */}
-      <section className="py-20 md:py-32 bg-white">
-        <div className="container mx-auto px-4">
-          <div className="max-w-6xl mx-auto">
-            {/* Header de la sección */}
-            <div className="text-center mb-20">
-              <h2 className="text-4xl md:text-5xl font-bold text-slate-800 mb-6">
-                NUESTRA{" "}
-                <span className="text-transparent bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text">
-                  HISTORIA
-                </span>
-              </h2>
-              <div className="w-24 h-1 bg-gradient-to-r from-blue-500 to-cyan-500 mx-auto mb-8"></div>
-              <p className="text-xl text-slate-600 max-w-3xl mx-auto leading-relaxed">
-                Más de tres décadas construyendo confianza en el sector
-                automotriz comercial
-              </p>
+      {/* ============ NUESTRA HISTORIA — timeline + odómetro ============ */}
+      <section className="relative overflow-x-clip bg-paper-0 py-20 text-ink-0 sm:py-24 lg:py-28">
+        <div className="mx-auto w-full max-w-[1480px] px-5 sm:px-8 lg:px-12">
+          <SectionHeading
+            index="01"
+            label="Nuestra Historia"
+            theme="light"
+            title={
+              <>
+                Nuestra <span className="text-petrol-deep">Historia</span>
+              </>
+            }
+            sub="Más de tres décadas construyendo confianza en el sector automotriz comercial"
+          />
+
+          {/* Gutter del odómetro (desktop) + timeline */}
+          <div className="mt-16 lg:mt-20 lg:flex lg:gap-10">
+            <div
+              className="relative hidden shrink-0 lg:block lg:w-16"
+              aria-hidden
+            >
+              <div
+                ref={odoRef}
+                className="sticky top-[42vh] flex h-44 items-center justify-center overflow-hidden"
+              >
+                {ERAS.map((era) => (
+                  <span
+                    key={era.year}
+                    data-odo
+                    className="gm-label absolute inset-0 flex items-center justify-center whitespace-nowrap rotate-180 text-petrol-deep [writing-mode:vertical-rl]"
+                  >
+                    {era.range}
+                  </span>
+                ))}
+              </div>
             </div>
 
             {/* Timeline */}
-            <div className="space-y-16">
-              {/* Primera Etapa: Los Inicios (1987-1999) */}
-              <div className="relative">
-                <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-3xl p-8 md:p-12 shadow-lg border border-blue-100">
-                  <div className="grid lg:grid-cols-2 gap-12 items-center">
-                    <div>
-                      <div className="flex items-center gap-4 mb-8">
-                        <div className="w-16 h-16 bg-gradient-to-r from-blue-600 to-cyan-600 rounded-2xl flex items-center justify-center shadow-lg">
-                          <Calendar className="w-8 h-8 text-white" />
-                        </div>
-                        <div>
-                          <h3 className="text-2xl md:text-3xl font-bold text-slate-800 mb-2">
-                            LOS INICIOS
-                          </h3>
-                          <span className="inline-block px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-full">
-                            1987 - 1999
-                          </span>
-                        </div>
-                      </div>
+            <div
+              ref={timelineRef}
+              className="relative grid flex-1 grid-cols-[28px_1fr] gap-x-5 sm:gap-x-8 lg:grid-cols-[36px_1fr] lg:gap-x-12"
+            >
+              {/* Riel + trazo que se dibuja */}
+              <div
+                aria-hidden
+                className="pointer-events-none absolute bottom-6 left-[13.5px] top-2 w-px bg-line-light lg:left-[17.5px]"
+              >
+                <span
+                  ref={lineFillRef}
+                  className="absolute inset-0 block origin-top scale-y-0 bg-petrol-deep"
+                />
+              </div>
 
-                      <div className="space-y-6">
-                        <div className="flex items-start gap-4">
-                          <div className="w-3 h-3 bg-blue-600 rounded-full mt-2 flex-shrink-0"></div>
-                          <div>
-                            <p className="text-slate-700 text-lg leading-relaxed">
-                              <strong className="text-blue-700">1987:</strong>{" "}
-                              Héctor Guzmán inicia su actividad en Santo Tomé
-                              (Ruta 19 y Bs As), especializándose en acoplados y
-                              remolques Astivia, compra-venta y consignación de
-                              camiones.
+              {ERAS.map((era, i) => (
+                <div key={era.year} data-era className="contents">
+                  {/* Nodo */}
+                  <div className="relative pt-1.5">
+                    <span
+                      data-era-dot
+                      className="absolute left-[7px] top-2 block size-[14px] border border-petrol-deep bg-paper-0 lg:left-[11px]"
+                    />
+                  </div>
+
+                  {/* Contenido de la era */}
+                  <div
+                    data-era-body
+                    className={`relative ${i < ERAS.length - 1 ? "pb-20 lg:pb-28" : "pb-2"}`}
+                  >
+                    {/* Año fantasma monumental */}
+                    <span
+                      data-era-year
+                      aria-hidden
+                      className="gm-display pointer-events-none absolute -top-12 right-0 select-none text-[clamp(5rem,13vw,12rem)] leading-none text-ink-0/[0.05] lg:-top-20"
+                    >
+                      {era.year}
+                    </span>
+
+                    <Reveal className="relative">
+                      <div
+                        data-reveal
+                        className="flex flex-wrap items-center gap-4"
+                      >
+                        <span className="gm-label border border-line-light-2 px-3 py-1.5 text-ink-1">
+                          {era.range}
+                        </span>
+                      </div>
+                      <h3
+                        data-reveal
+                        className="gm-display text-display-2 mt-5 text-ink-0"
+                      >
+                        {era.title}
+                      </h3>
+                    </Reveal>
+
+                    <div className="mt-9 grid items-start gap-10 lg:grid-cols-2 lg:gap-14">
+                      {/* Hitos */}
+                      <Reveal
+                        className={`space-y-7 ${era.flip ? "lg:order-2" : ""}`}
+                        stagger={0.12}
+                      >
+                        {era.items.map((item, j) => (
+                          <div
+                            key={j}
+                            data-reveal
+                            className="grid grid-cols-[20px_1fr] gap-4"
+                          >
+                            <span
+                              aria-hidden
+                              className="gm-label pt-1 text-petrol-deep"
+                            >
+                              {String(j + 1).padStart(2, "0")}
+                            </span>
+                            <p className="border-l border-line-light pl-5 text-base leading-relaxed text-ink-1 sm:text-lg">
+                              {item}
                             </p>
                           </div>
-                        </div>
+                        ))}
+                      </Reveal>
 
-                        <div className="flex items-start gap-4">
-                          <div className="w-3 h-3 bg-cyan-600 rounded-full mt-2 flex-shrink-0"></div>
-                          <div>
-                            <p className="text-slate-700 text-lg leading-relaxed">
-                              <strong className="text-cyan-700">1989:</strong>{" "}
-                              Traslado al nuevo local propio en
-                              <strong className="text-slate-800">
-                                {" "}
-                                Avda. Blas Parera 6422
-                              </strong>
-                              , Santa Fe.
-                            </p>
+                      {/* Foto de archivo */}
+                      <Reveal
+                        variant="wipe"
+                        className={era.flip ? "lg:order-1" : ""}
+                      >
+                        <figure
+                          data-reveal
+                          className="group border border-line-light bg-paper-1"
+                        >
+                          <div className="relative aspect-[4/3] overflow-hidden border-b border-line-light">
+                            <Image
+                              src={era.image}
+                              alt={era.caption}
+                              fill
+                              sizes="(max-width: 1024px) 100vw, 50vw"
+                              className="object-cover grayscale-[25%] transition-[filter,transform] duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:scale-[1.03] group-hover:grayscale-0"
+                            />
                           </div>
-                        </div>
-
-                        <div className="flex items-start gap-4">
-                          <div className="w-3 h-3 bg-blue-600 rounded-full mt-2 flex-shrink-0"></div>
-                          <div>
-                            <p className="text-slate-700 text-lg leading-relaxed">
-                              Incorporación de camiones{" "}
-                              <strong className="text-slate-800">
-                                Fiat (hoy Iveco)
-                              </strong>{" "}
-                              como subagentes de{" "}
-                              <strong className="text-blue-700">
-                                Frencia y Rossi de Córdoba
-                              </strong>{" "}
-                              hasta 1999.
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="relative">
-                      <div className="bg-white rounded-2xl p-4 shadow-xl transform hover:scale-105 transition-transform duration-300">
-                        <Image
-                          src="/images/nosotros/equipo guzman motoros.webp"
-                          alt="Héctor Guzmán, Cristina y su hijo Leonardo"
-                          width={500}
-                          height={350}
-                          className="w-full h-auto rounded-xl"
-                        />
-                        <div className="p-4">
-                          <p className="text-sm text-slate-600 text-center font-medium">
-                            Héctor y Cristina con su hijo Leonardo
-                          </p>
-                        </div>
-                      </div>
+                          <figcaption className="flex items-center justify-between gap-4 px-5 py-4">
+                            <span className="gm-label text-ink-2">
+                              {era.caption}
+                            </span>
+                            <span className="gm-plus shrink-0 text-petrol-deep" />
+                          </figcaption>
+                        </figure>
+                      </Reveal>
                     </div>
                   </div>
                 </div>
-              </div>
-
-              {/* Segunda Etapa: Era Volkswagen (1999-2019) */}
-              <div className="relative">
-                <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-3xl p-8 md:p-12 shadow-xl text-white">
-                  <div className="grid lg:grid-cols-2 gap-12 items-center">
-                    <div className="lg:order-2">
-                      <div className="flex items-center gap-4 mb-8">
-                        <div className="w-16 h-16 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-2xl flex items-center justify-center shadow-lg">
-                          <Truck className="w-8 h-8 text-white" />
-                        </div>
-                        <div>
-                          <h3 className="text-2xl md:text-3xl font-bold text-white mb-2">
-                            ERA VOLKSWAGEN
-                          </h3>
-                          <span className="inline-block px-4 py-2 bg-blue-500 text-white text-sm font-semibold rounded-full">
-                            1999 - 2019
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="space-y-6">
-                        <div className="flex items-start gap-4">
-                          <div className="w-3 h-3 bg-blue-400 rounded-full mt-2 flex-shrink-0"></div>
-                          <div>
-                            <p className="text-slate-200 text-lg leading-relaxed">
-                              <strong className="text-blue-400">1999:</strong>{" "}
-                              Llegada de Volkswagen de camiones y buses al país.
-                              Comenzamos como subagentes de{" "}
-                              <strong className="text-blue-400">
-                                Devol SA
-                              </strong>{" "}
-                              (concesionario oficial).
-                            </p>
-                          </div>
-                        </div>
-
-                        <div className="flex items-start gap-4">
-                          <div className="w-3 h-3 bg-cyan-400 rounded-full mt-2 flex-shrink-0"></div>
-                          <div>
-                            <p className="text-slate-200 text-lg leading-relaxed">
-                              <strong className="text-cyan-400">2016:</strong>{" "}
-                              Devol SA se traslada a Blas Parera 10800 tras
-                              haber vendido{" "}
-                              <strong className="text-cyan-400">
-                                más de 1500 unidades
-                              </strong>{" "}
-                              en la zona.
-                            </p>
-                          </div>
-                        </div>
-
-                        <div className="flex items-start gap-4">
-                          <div className="w-3 h-3 bg-blue-400 rounded-full mt-2 flex-shrink-0"></div>
-                          <div>
-                            <p className="text-slate-200 text-lg leading-relaxed">
-                              <strong className="text-blue-400">2019:</strong>{" "}
-                              Leonardo, con 30 años de experiencia, decide
-                              independizarse y reabrir el negocio familiar.
-                              Ambos renuncian a Devol SA en abril.
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="lg:order-1 relative">
-                      <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-4 shadow-xl transform hover:scale-105 transition-transform duration-300">
-                        <Image
-                          src="/images/nosotros/equipo guzman motros 2.webp"
-                          alt="Oficina Guzman Motors - Equipo de trabajo"
-                          width={500}
-                          height={350}
-                          className="w-full h-auto rounded-xl"
-                        />
-                        <div className="p-4">
-                          <p className="text-sm text-slate-300 text-center font-medium">
-                            El equipo en las oficinas de Blas Parera 6422
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Tercera Etapa: Guzman Motors SRL (2019-Presente) */}
-              <div className="relative">
-                <div className="bg-gradient-to-br from-cyan-50 to-blue-50 rounded-3xl p-8 md:p-12 shadow-lg border border-cyan-100">
-                  <div className="grid lg:grid-cols-2 gap-12 items-center">
-                    <div>
-                      <div className="flex items-center gap-4 mb-8">
-                        <div className="w-16 h-16 bg-gradient-to-r from-cyan-600 to-blue-600 rounded-2xl flex items-center justify-center shadow-lg">
-                          <Star className="w-8 h-8 text-white" />
-                        </div>
-                        <div>
-                          <h3 className="text-2xl md:text-3xl font-bold text-slate-800 mb-2">
-                            GUZMAN MOTORS SRL
-                          </h3>
-                          <span className="inline-block px-4 py-2 bg-gradient-to-r from-cyan-600 to-blue-600 text-white text-sm font-semibold rounded-full">
-                            2019 - Presente
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="space-y-6">
-                        <div className="flex items-start gap-4">
-                          <div className="w-3 h-3 bg-cyan-600 rounded-full mt-2 flex-shrink-0"></div>
-                          <div>
-                            <p className="text-slate-700 text-lg leading-relaxed">
-                              Nace{" "}
-                              <strong className="text-cyan-700">
-                                Guzman Motors SRL
-                              </strong>{" "}
-                              con Leonardo y Héctor como titulares, regresando
-                              al histórico local de Blas Parera 6422.
-                            </p>
-                          </div>
-                        </div>
-
-                        <div className="flex items-start gap-4">
-                          <div className="w-3 h-3 bg-blue-600 rounded-full mt-2 flex-shrink-0"></div>
-                          <div>
-                            <p className="text-slate-700 text-lg leading-relaxed">
-                              Representamos a{" "}
-                              <strong className="text-blue-700">
-                                Red Alcorta
-                              </strong>{" "}
-                              en la venta de acoplados y semirremolques de las
-                              marcas:{" "}
-                              <strong className="text-slate-800">
-                                Sola y Brusa, Lambert, Metagro, Aiello y
-                                Cormetal
-                              </strong>
-                              .
-                            </p>
-                          </div>
-                        </div>
-
-                        <div className="flex items-start gap-4">
-                          <div className="w-3 h-3 bg-cyan-600 rounded-full mt-2 flex-shrink-0"></div>
-                          <div>
-                            <p className="text-slate-700 text-lg leading-relaxed">
-                              Somos subagentes de{" "}
-                              <strong className="text-cyan-700">
-                                LTA Motors
-                              </strong>{" "}
-                              para las marcas
-                              <strong className="text-slate-800">
-                                {" "}
-                                Foton y Zanella
-                              </strong>
-                              .
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="relative">
-                      <div className="bg-white rounded-2xl p-4 shadow-xl transform hover:scale-105 transition-transform duration-300">
-                        <Image
-                          src="/images/nosotros/fachada guzman motors.jpeg"
-                          alt="Fachada actual Guzman Motors SRL"
-                          width={500}
-                          height={350}
-                          className="w-full h-auto rounded-xl"
-                        />
-                        <div className="p-4">
-                          <p className="text-sm text-slate-600 text-center font-medium">
-                            Nuestra fachada actual - Guzman Motors SRL
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
+              ))}
             </div>
+          </div>
+
+          {/* Cierre: las cifras del negocio (reubicadas del hero) */}
+          <div
+            ref={balanceRef}
+            className="mt-20 border-t border-line-light pt-12 lg:mt-24"
+          >
+            <p className="gm-label mb-9 text-ink-2">En números</p>
+            <dl className="grid grid-cols-2 gap-x-8 gap-y-12 lg:grid-cols-4">
+              {STATS.map((stat) => (
+                <div key={stat.label}>
+                  <dt className="gm-label mb-4 text-ink-2">{stat.label}</dt>
+                  <dd className="overflow-hidden">
+                    <span
+                      data-balance-num
+                      className="gm-display block text-[clamp(2.6rem,7vw,5rem)] leading-none text-ink-0 will-change-[clip-path]"
+                    >
+                      {stat.value}
+                      {stat.suffix ? (
+                        <span className="text-petrol-deep">{stat.suffix}</span>
+                      ) : null}
+                    </span>
+                  </dd>
+                </div>
+              ))}
+            </dl>
           </div>
         </div>
       </section>
 
-      {/* Información de Contacto */}
-      <section className="py-20 md:py-32 bg-gradient-to-br from-slate-800 via-slate-900 to-blue-900 text-white">
-        <div className="container mx-auto px-4">
-          <div className="max-w-6xl mx-auto">
-            <div className="text-center mb-20">
-              <h2 className="text-4xl md:text-5xl font-bold text-white mb-6">
-                INFORMACIÓN DE{" "}
-                <span className="text-transparent bg-gradient-to-r from-cyan-400 to-blue-400 bg-clip-text">
-                  CONTACTO
-                </span>
-              </h2>
-              <div className="w-24 h-1 bg-gradient-to-r from-cyan-500 to-blue-500 mx-auto mb-8"></div>
-              <p className="text-xl text-slate-300 max-w-3xl mx-auto leading-relaxed">
-                Estamos aquí para ayudarte. Visitanos, llamanos o escribenos.
+      {/* ============ INFORMACIÓN DE CONTACTO ============ */}
+      <section className="relative overflow-hidden border-t border-line-dark bg-carbon-1 py-20 text-platinum sm:py-24 lg:py-28">
+        <div className="mx-auto w-full max-w-[1480px] px-5 sm:px-8 lg:px-12">
+          <SectionHeading
+            index="02"
+            label="Visitanos"
+            theme="dark"
+            title={
+              <>
+                Información de{" "}
+                <span className="text-petrol-bright">Contacto</span>
+              </>
+            }
+            sub="Estamos aquí para ayudarte. Visitanos, llamanos o escribenos."
+          />
+
+          <Reveal className="mt-12 grid grid-cols-1 border-y border-line-dark md:grid-cols-3">
+            <div
+              data-reveal
+              className="border-line-dark px-2 py-8 sm:px-6 md:border-r"
+            >
+              <p className="gm-label flex items-center gap-2.5 text-steel">
+                <Clock
+                  className="size-4 text-petrol-bright"
+                  strokeWidth={1.5}
+                />
+                Horarios
+              </p>
+              <p className="gm-display mt-5 text-xl text-platinum">
+                Lunes - Viernes
+              </p>
+              <p className="mt-3 text-base leading-relaxed text-silver">
+                8:30 - 12:30 hs
+                <br />
+                15:30 - 18:30 hs
               </p>
             </div>
 
-            <div className="grid lg:grid-cols-3 gap-8">
-              {/* Horarios */}
-              <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-8 border border-white/20 hover:bg-white/15 transition-all duration-300">
-                <div className="text-center mb-6">
-                  <div className="w-16 h-16 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg">
-                    <Clock className="w-8 h-8 text-white" />
-                  </div>
-                  <h3 className="text-2xl font-bold text-white mb-2">
-                    HORARIOS
-                  </h3>
-                </div>
-                <div className="space-y-4 text-center">
-                  <div>
-                    <p className="font-semibold text-cyan-300 text-lg mb-3">
-                      Lunes - Viernes:
-                    </p>
-                    <p className="text-slate-200 text-lg">8:30 - 12:30 hs</p>
-                    <p className="text-slate-200 text-lg">15:30 - 18:30 hs</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Ubicación */}
-              <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-8 border border-white/20 hover:bg-white/15 transition-all duration-300">
-                <div className="text-center mb-6">
-                  <div className="w-16 h-16 bg-gradient-to-r from-green-500 to-emerald-500 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg">
-                    <MapPin className="w-8 h-8 text-white" />
-                  </div>
-                  <h3 className="text-2xl font-bold text-white mb-2">
-                    ENCONTRANOS
-                  </h3>
-                </div>
-                <div className="space-y-4 text-center">
-                  <div>
-                    <p className="font-semibold text-green-300 text-lg mb-3">
-                      Dirección:
-                    </p>
-                    <p className="text-slate-200 text-lg font-medium">
-                      AV. Blas Parera 6422
-                    </p>
-                    <p className="text-slate-200 text-lg">Santa Fe</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Contacto */}
-              <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-8 border border-white/20 hover:bg-white/15 transition-all duration-300">
-                <div className="text-center mb-6">
-                  <div className="w-16 h-16 bg-gradient-to-r from-cyan-500 to-blue-500 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg">
-                    <Users className="w-8 h-8 text-white" />
-                  </div>
-                  <h3 className="text-2xl font-bold text-white mb-2">
-                    CONTACTO
-                  </h3>
-                </div>
-                <div className="space-y-6 text-center">
-                  <div>
-                    <p className="font-semibold text-cyan-300 text-lg mb-3">
-                      Teléfono:
-                    </p>
-                    <div className="space-y-2">
-                      <p className="text-slate-200 text-lg hover:text-cyan-300 transition-colors cursor-pointer">
-                        +54 9 342 421 6850
-                      </p>
-                    </div>
-                  </div>
-                  <div>
-                    <p className="font-semibold text-cyan-300 text-lg mb-3">
-                      Email:
-                    </p>
-                    <p className="text-cyan-400 text-lg hover:text-cyan-300 transition-colors cursor-pointer font-medium">
-                      hguzmanmotors@gmail.com
-                    </p>
-                  </div>
-                </div>
-              </div>
+            <div
+              data-reveal
+              className="border-t border-line-dark px-2 py-8 sm:px-6 md:border-r md:border-t-0"
+            >
+              <p className="gm-label flex items-center gap-2.5 text-steel">
+                <MapPin
+                  className="size-4 text-petrol-bright"
+                  strokeWidth={1.5}
+                />
+                Encontranos
+              </p>
+              <p className="gm-display mt-5 text-xl text-platinum">
+                AV. Blas Parera 6422
+              </p>
+              <p className="mt-3 text-base leading-relaxed text-silver">
+                Santa Fe
+              </p>
             </div>
+
+            <div
+              data-reveal
+              className="border-t border-line-dark px-2 py-8 sm:px-6 md:border-t-0"
+            >
+              <p className="gm-label flex items-center gap-2.5 text-steel">
+                <Phone
+                  className="size-4 text-petrol-bright"
+                  strokeWidth={1.5}
+                />
+                Contacto
+              </p>
+              <a
+                href="tel:+5493424216850"
+                className="gm-display gm-underline mt-5 inline-block text-xl text-platinum"
+              >
+                +54 9 342 421 6850
+              </a>
+              <p className="mt-3">
+                <a
+                  href="mailto:hguzmanmotors@gmail.com"
+                  className="gm-underline inline-flex items-center gap-2 text-base text-silver transition-colors hover:text-platinum"
+                >
+                  <Mail
+                    className="size-4 text-petrol-bright"
+                    strokeWidth={1.5}
+                  />
+                  hguzmanmotors@gmail.com
+                </a>
+              </p>
+            </div>
+          </Reveal>
+
+          <div className="mt-12 flex justify-end">
+            <GmButton href="/contacto" tone="solidLight">
+              Contactanos
+            </GmButton>
           </div>
         </div>
       </section>

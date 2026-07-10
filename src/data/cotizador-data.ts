@@ -143,7 +143,7 @@ export const PRODUCTS: Product[] = [
   {
     id: 11,
     name: "E-AUMARK",
-    image: "/images/FOTON/eaumark.png",
+    image: "/images/FOTON/eaumark.webp",
     costCategory: 2,
     provider: "LTA",
     types: {

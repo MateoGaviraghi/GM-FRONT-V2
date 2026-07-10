@@ -16,7 +16,7 @@ export function PageTransitionProvider({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
-  const [isVisible, setIsVisible] = useState(true); // Iniciar visible
+  const [isVisible, setIsVisible] = useState(true); // Iniciar visible (splash solo primera visita)
   const [animationState, setAnimationState] = useState<"entering" | "leaving">(
     "entering"
   );
@@ -24,24 +24,40 @@ export function PageTransitionProvider({
   const isInitialMount = useRef(true);
 
   useEffect(() => {
-    // Ejecutar transición en el montaje inicial también
+    // Splash SOLO en la primera visita de la sesión — nunca al navegar.
     if (isInitialMount.current) {
       isInitialMount.current = false;
 
-      // Mostrar transición inicial
+      let alreadyShown = false;
+      try {
+        alreadyShown = sessionStorage.getItem("gm-splash") === "1";
+      } catch {
+        /* storage bloqueado: mostrar splash igual */
+      }
+
+      if (alreadyShown) {
+        setIsVisible(false);
+        prevPathname.current = pathname;
+        return;
+      }
+
+      try {
+        sessionStorage.setItem("gm-splash", "1");
+      } catch {
+        /* noop */
+      }
+
       setIsVisible(true);
       setAnimationState("entering");
 
-      // Después de mostrar la animación, cambiar a salida
       const leaveTimer = setTimeout(() => {
         setAnimationState("leaving");
-      }, 800);
+      }, 450);
 
-      // Ocultar completamente la transición
       const hideTimer = setTimeout(() => {
         setIsVisible(false);
         prevPathname.current = pathname;
-      }, 1200);
+      }, 800);
 
       return () => {
         clearTimeout(leaveTimer);
@@ -49,30 +65,10 @@ export function PageTransitionProvider({
       };
     }
 
-    // Ejecutar si cambió la ruta
+    // Cambio de ruta: sin telón, solo scroll al inicio.
     if (pathname !== prevPathname.current) {
-      // Scroll al inicio inmediatamente
       window.scrollTo({ top: 0, behavior: "instant" });
-
-      // Estado de entrada
-      setAnimationState("entering");
-      setIsVisible(true);
-
-      // Después de mostrar la animación, cambiar a salida
-      const leaveTimer = setTimeout(() => {
-        setAnimationState("leaving");
-      }, 800);
-
-      // Ocultar completamente la transición
-      const hideTimer = setTimeout(() => {
-        setIsVisible(false);
-        prevPathname.current = pathname;
-      }, 1200);
-
-      return () => {
-        clearTimeout(leaveTimer);
-        clearTimeout(hideTimer);
-      };
+      prevPathname.current = pathname;
     }
   }, [pathname]);
 
@@ -85,165 +81,74 @@ export function PageTransitionProvider({
           aria-hidden="true"
           style={{ pointerEvents: "none" }}
         >
-          {/* Overlay animado con gradiente azul */}
+          {/* Telón carbón */}
           <div
-            className={`absolute inset-0 bg-gradient-to-br from-slate-900 via-cyan-900 to-slate-950 transition-all duration-500 ease-in-out ${
+            className={`absolute inset-0 transition-opacity duration-500 ease-in-out ${
               animationState === "entering" ? "opacity-100" : "opacity-0"
             }`}
+            style={{ background: "var(--gm-carbon-0)" }}
           />
 
-          {/* Efecto de onda azul */}
-          <div
-            className={`absolute inset-0 bg-gradient-to-r from-transparent via-cyan-500/40 to-transparent transition-opacity duration-500 ease-in-out ${
-              animationState === "entering" ? "opacity-100" : "opacity-0"
-            }`}
-            style={{
-              animation:
-                animationState === "entering"
-                  ? "wave 1.0s cubic-bezier(0.45, 0, 0.55, 1)"
-                  : "none",
-            }}
-          />
-
-          {/* Logo central con animaciones */}
-          <div className="absolute inset-0 flex items-center justify-center">
+          {/* Marca centrada — sobria, técnica */}
+          <div className="absolute inset-0 flex flex-col items-center justify-center">
             <div
-              className={`relative transition-all duration-500 ease-in-out ${
+              className={`flex flex-col items-center transition-all duration-500 ease-in-out ${
                 animationState === "entering"
-                  ? "opacity-100 scale-100"
-                  : "opacity-0 scale-90"
+                  ? "scale-100 opacity-100"
+                  : "scale-[0.97] opacity-0"
               }`}
-              style={{
-                transitionDelay: animationState === "entering" ? "0.1s" : "0s",
-              }}
             >
-              {/* Anillos pulsantes alrededor del logo */}
-              <div className="absolute inset-0 -m-8">
-                <div
-                  className="absolute inset-0 rounded-full border-2 border-cyan-400/30 animate-ping"
-                  style={{ animationDuration: "1.2s" }}
-                />
-                <div
-                  className="absolute inset-0 rounded-full border-2 border-cyan-500/20 animate-ping"
-                  style={{ animationDuration: "1.5s", animationDelay: "0.1s" }}
+              <div className="relative h-20 w-20 sm:h-24 sm:w-24">
+                <Image
+                  src="/images/logo/logoGM-Photoroom.png"
+                  alt="Guzman Motors"
+                  fill
+                  sizes="96px"
+                  className="object-contain"
+                  style={{ mixBlendMode: "screen" }}
+                  priority
                 />
               </div>
 
-              {/* Glow effect */}
-              <div className="absolute inset-0 -m-16 bg-cyan-400/20 blur-3xl rounded-full animate-pulse" />
-
-              {/* Contenedor del logo */}
-              <div className="relative bg-gradient-to-br from-slate-800 via-slate-900 to-slate-950 rounded-3xl p-8 border-4 border-cyan-500/40 shadow-2xl shadow-cyan-500/50">
-                <div className="relative w-32 h-32">
-                  <Image
-                    src="/images/logo/logoGM-Photoroom.png"
-                    alt="Guzman Motors"
-                    fill
-                    className="object-contain animate-float"
-                    style={{ mixBlendMode: "screen" }}
-                    priority
-                  />
-
-                  {/* Brillo rotativo */}
-                  <div
-                    className="absolute inset-0 bg-gradient-to-r from-transparent via-cyan-400/40 to-transparent"
-                    style={{
-                      animation: "shine 1.0s infinite linear",
-                    }}
-                  />
-                </div>
+              {/* Línea de progreso técnica */}
+              <div
+                className="relative mt-8 h-px w-44 overflow-hidden sm:w-56"
+                style={{ background: "var(--gm-line-dark)" }}
+              >
+                <span
+                  className="absolute inset-y-0 left-0 w-full origin-left"
+                  style={{
+                    background: "var(--gm-petrol-bright)",
+                    animation:
+                      animationState === "entering"
+                        ? "gm-loadbar 0.85s cubic-bezier(0.16,1,0.3,1) forwards"
+                        : "none",
+                    transform:
+                      animationState === "leaving" ? "scaleX(1)" : undefined,
+                  }}
+                />
               </div>
 
-              {/* Partículas decorativas */}
-              <div className="absolute -top-4 -left-4 w-3 h-3 bg-cyan-400 rounded-full animate-bounce" />
-              <div
-                className="absolute -top-6 -right-6 w-2 h-2 bg-cyan-300 rounded-full animate-bounce"
-                style={{ animationDelay: "0.1s" }}
-              />
-              <div
-                className="absolute -bottom-4 -right-4 w-3 h-3 bg-cyan-500 rounded-full animate-bounce"
-                style={{ animationDelay: "0.2s" }}
-              />
-              <div
-                className="absolute -bottom-6 -left-6 w-2 h-2 bg-cyan-300 rounded-full animate-bounce"
-                style={{ animationDelay: "0.3s" }}
-              />
-            </div>
-
-            {/* Texto de carga opcional */}
-            <div
-              className={`absolute bottom-1/3 text-cyan-400 font-bold text-lg tracking-wider transition-all duration-500 ease-in-out ${
-                animationState === "entering"
-                  ? "opacity-100 translate-y-0"
-                  : "opacity-0 translate-y-4"
-              }`}
-              style={{
-                transitionDelay: animationState === "entering" ? "0.2s" : "0s",
-              }}
-            >
-              <div className="flex gap-1">
-                <span className="animate-pulse">●</span>
-                <span
-                  className="animate-pulse"
-                  style={{ animationDelay: "0.1s" }}
-                >
-                  ●
-                </span>
-                <span
-                  className="animate-pulse"
-                  style={{ animationDelay: "0.2s" }}
-                >
-                  ●
-                </span>
-              </div>
+              <span
+                className="mt-5 font-mono text-[0.625rem] font-medium uppercase"
+                style={{
+                  color: "var(--gm-steel)",
+                  letterSpacing: "0.28em",
+                }}
+              >
+                Guzman Motors
+              </span>
             </div>
           </div>
 
-          {/* Estilos globales para animaciones */}
           <style jsx>{`
-            @keyframes wave {
-              0% {
-                transform: translateX(-100%) skewX(-12deg);
-                opacity: 0;
+            @keyframes gm-loadbar {
+              from {
+                transform: scaleX(0);
               }
-              20% {
-                opacity: 1;
+              to {
+                transform: scaleX(1);
               }
-              80% {
-                opacity: 1;
-              }
-              100% {
-                transform: translateX(100%) skewX(-12deg);
-                opacity: 0;
-              }
-            }
-
-            @keyframes shine {
-              0% {
-                transform: translateX(-100%) rotate(45deg);
-                opacity: 0;
-              }
-              50% {
-                opacity: 0.6;
-              }
-              100% {
-                transform: translateX(100%) rotate(45deg);
-                opacity: 0;
-              }
-            }
-
-            @keyframes float {
-              0%,
-              100% {
-                transform: translateY(0) rotate(0deg);
-              }
-              50% {
-                transform: translateY(-8px) rotate(3deg);
-              }
-            }
-
-            .animate-float {
-              animation: float 2.0s ease-in-out infinite;
             }
           `}</style>
         </div>

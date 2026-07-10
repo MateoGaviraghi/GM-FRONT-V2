@@ -1,11 +1,9 @@
 import { useState } from "react";
-import { pdf } from "@react-pdf/renderer";
 import {
   PrendarioCalculation,
   LeasingCalculation,
   Product,
 } from "@/types/cotizador";
-import { PrendarioPDF, LeasingPDF } from "@/components/cotizador/cotizador-pdf";
 
 interface UseCotizadorPDFParams {
   selectedProduct: Product | null;
@@ -18,21 +16,26 @@ export function useCotizadorPDF() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isPrinting, setIsPrinting] = useState(false);
 
-  const createPDFDocument = (
+  // @react-pdf/renderer (y sus documentos) se cargan solo al generar/imprimir
+  // un PDF, para no inflar el bundle inicial de /cotizador.
+  const buildPdfBlob = async (
     params: UseCotizadorPDFParams,
     data: PrendarioCalculation | LeasingCalculation,
   ) => {
-    if (params.selectedFinancingProduct === "Prendario") {
-      return (
+    const [{ pdf }, { PrendarioPDF, LeasingPDF }] = await Promise.all([
+      import("@react-pdf/renderer"),
+      import("@/components/cotizador/cotizador-pdf"),
+    ]);
+
+    const pdfDocument =
+      params.selectedFinancingProduct === "Prendario" ? (
         <PrendarioPDF
           data={data as PrendarioCalculation}
           selectedProduct={params.selectedProduct!}
           selectedType={params.selectedType!}
           dollarRate={params.dollarRate}
         />
-      );
-    } else {
-      return (
+      ) : (
         <LeasingPDF
           data={data as LeasingCalculation}
           selectedProduct={params.selectedProduct!}
@@ -40,7 +43,8 @@ export function useCotizadorPDF() {
           dollarRate={params.dollarRate}
         />
       );
-    }
+
+    return pdf(pdfDocument).toBlob();
   };
 
   const generatePDF = async (
@@ -58,10 +62,8 @@ export function useCotizadorPDF() {
     try {
       setIsGenerating(true);
 
-      const pdfDocument = createPDFDocument(params, data);
-
       // Generar el blob del PDF
-      const blob = await pdf(pdfDocument).toBlob();
+      const blob = await buildPdfBlob(params, data);
 
       // Crear URL y abrir en nueva pestaña
       const url = URL.createObjectURL(blob);
@@ -91,10 +93,8 @@ export function useCotizadorPDF() {
     try {
       setIsPrinting(true);
 
-      const pdfDocument = createPDFDocument(params, data);
-
       // Generar el blob del PDF
-      const blob = await pdf(pdfDocument).toBlob();
+      const blob = await buildPdfBlob(params, data);
 
       // Crear URL del blob
       const url = URL.createObjectURL(blob);

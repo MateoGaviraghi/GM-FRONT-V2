@@ -1,28 +1,29 @@
 "use client";
 
-import { useState } from "react";
-import {
-  Newspaper,
-  ArrowLeft,
-  Upload,
-  X,
-  Save,
-  AlertCircle,
-  CheckCircle,
-  Image as ImageIcon,
-  Star,
-  Calendar,
-  Tag,
-  Link as LinkIcon,
-  ExternalLink,
-  Plus,
-} from "lucide-react";
-import Link from "next/link";
+import { useRef, useState } from "react";
+import { AlertCircle, ExternalLink, Loader2, Plus, Save, X } from "lucide-react";
 import { useRouter } from "next/navigation";
-import Image from "next/image";
 import { novedadService } from "@/services";
 import { useNovedadOptions } from "@/hooks";
 import type { CreateNovedadDto, NovedadLink } from "@/types";
+import {
+  AdminButton,
+  Breadcrumb,
+  DraftBanner,
+  Field,
+  FormSection,
+  FormShell,
+  mapApiError,
+  MediaUploadZone,
+  type MediaPreview,
+  SelectField,
+  SwitchField,
+  TextareaField,
+  TextInput,
+  useFormDraft,
+  useToast,
+  useUnsavedGuard,
+} from "@/components/admin/kit";
 
 interface FormData {
   titulo: string;
@@ -48,19 +49,27 @@ interface FormErrors {
   [key: string]: string;
 }
 
+const INITIAL_FORM_DATA: FormData = {
+  titulo: "",
+  contenido: "",
+  resumen: "",
+  categoria: "",
+  destacada: false,
+  fechaPublicacion: new Date().toISOString().split("T")[0],
+};
+
+type DraftShape = {
+  formData: FormData;
+  links: NovedadLink[];
+};
+
 export default function CrearNovedadPage() {
   const router = useRouter();
   const { categorias } = useNovedadOptions();
+  const { showToast } = useToast();
 
   // Estados del formulario
-  const [formData, setFormData] = useState<FormData>({
-    titulo: "",
-    contenido: "",
-    resumen: "",
-    categoria: "",
-    destacada: false,
-    fechaPublicacion: new Date().toISOString().split("T")[0],
-  });
+  const [formData, setFormData] = useState<FormData>(INITIAL_FORM_DATA);
 
   // Estados de archivos
   const [imageFiles, setImageFiles] = useState<FilePreview[]>([]);
@@ -80,6 +89,25 @@ export default function CrearNovedadPage() {
   const [success, setSuccess] = useState(false);
   const [showCategoriaInput, setShowCategoriaInput] = useState(false);
   const [nuevaCategoria, setNuevaCategoria] = useState("");
+
+  // Borrador (elderly-first: nunca perder una carga a mitad de hacer)
+  const { hasDraft, restoreDraft, dismissDraft, clearDraft } =
+    useFormDraft<DraftShape>(
+      "novedad-crear",
+      { formData, links },
+      (draft) => {
+        setFormData(draft.formData ?? INITIAL_FORM_DATA);
+        setLinks(draft.links ?? []);
+      },
+    );
+
+  const initialSnapshotRef = useRef(JSON.stringify(INITIAL_FORM_DATA));
+  const isDirty =
+    JSON.stringify(formData) !== initialSnapshotRef.current ||
+    links.length > 0 ||
+    imageFiles.length > 0;
+
+  useUnsavedGuard(isDirty);
 
   // Validaciones
   const validateForm = (): boolean => {
@@ -127,18 +155,13 @@ export default function CrearNovedadPage() {
     }
   };
 
-  // Manejar cambios en checkbox
-  const handleCheckboxChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, checked } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: checked }));
-  };
-
-  // Manejar selección de imágenes
-  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
-
+  // Manejar selección de imágenes — adaptador: MediaUploadZone entrega File[] ya comprimidos.
+  const handleImageFilesSelected = (files: File[]) => {
     if (imageFiles.length + files.length > 10) {
-      alert("Máximo 10 imágenes permitidas");
+      setErrors((prev) => ({
+        ...prev,
+        imagenes: "Máximo 10 imágenes permitidas",
+      }));
       return;
     }
 
@@ -183,7 +206,11 @@ export default function CrearNovedadPage() {
   // Agregar link a la lista
   const handleAddLink = () => {
     if (!currentLink.titulo.trim() || !currentLink.url.trim()) {
-      alert("El título y la URL son requeridos");
+      showToast({
+        title: "Faltan datos del enlace",
+        message: "El título y la URL son requeridos.",
+        variant: "warn",
+      });
       return;
     }
 
@@ -191,7 +218,11 @@ export default function CrearNovedadPage() {
     try {
       new URL(currentLink.url);
     } catch {
-      alert("Por favor ingresa una URL válida");
+      showToast({
+        title: "URL inválida",
+        message: "Por favor ingresá una URL válida (ej: https://ejemplo.com).",
+        variant: "warn",
+      });
       return;
     }
 
@@ -229,7 +260,7 @@ export default function CrearNovedadPage() {
         categoria: formData.categoria.trim() || undefined,
         destacada: formData.destacada,
         fechaPublicacion: new Date(formData.fechaPublicacion).toISOString(),
-        links: links.length > 0 ? links : undefined, // ← NUEVO: Incluir links
+        links: links.length > 0 ? links : undefined,
       };
 
       const images = imageFiles.map((preview) => preview.file);
@@ -245,180 +276,122 @@ export default function CrearNovedadPage() {
       // Limpiar URLs de objeto
       imageFiles.forEach((preview) => URL.revokeObjectURL(preview.url));
 
+      clearDraft();
+      showToast({
+        message: "La novedad se creó correctamente.",
+        variant: "success",
+      });
+
       // Redirigir después de 1 segundo
       setTimeout(() => {
         router.push("/admin/novedades?created=true");
       }, 1000);
     } catch (err: unknown) {
       console.error("Error creando novedad:", err);
-      const errorMessage =
-        err instanceof Error ? err.message : "Error al crear la novedad";
-      setErrors({ submit: errorMessage });
+      showToast({
+        title: "No se pudo crear la novedad",
+        message: mapApiError(err),
+        variant: "danger",
+      });
     } finally {
       setLoading(false);
     }
   };
 
+  const imagePreviews: MediaPreview[] = imageFiles.map((f, idx) => ({
+    id: String(idx),
+    url: f.url,
+    type: "image",
+  }));
+
   return (
-    <div className="p-6 max-w-5xl mx-auto">
-      {/* Header */}
-      <div className="mb-6">
-        <Link
-          href="/admin/novedades"
-          className="inline-flex items-center gap-2 text-cyan-600 hover:text-cyan-700 mb-4"
+    <div className="space-y-8">
+      <Breadcrumb
+        items={[
+          { label: "Novedades", href: "/admin/novedades" },
+          { label: "Crear novedad" },
+        ]}
+      />
+
+      {hasDraft ? (
+        <DraftBanner onRestore={restoreDraft} onDismiss={dismissDraft} />
+      ) : null}
+
+      <form onSubmit={handleSubmit}>
+        <FormShell
+          title="Crear novedad"
+          description="Publicá una nueva noticia, evento o actualización. Los campos con * son obligatorios."
         >
-          <ArrowLeft className="h-4 w-4" />
-          Volver al dashboard
-        </Link>
-
-        <div className="flex items-center gap-3">
-          <div className="w-12 h-12 bg-cyan-100 rounded-lg flex items-center justify-center">
-            <Newspaper className="h-6 w-6 text-cyan-600" />
-          </div>
-          <div>
-            <h1 className="text-3xl font-bold text-gray-800">
-              Crear Nueva Novedad
-            </h1>
-            <p className="text-gray-600 mt-1">
-              Publica una nueva noticia, evento o actualización
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* Mensaje de éxito */}
-      {success && (
-        <div className="mb-6 bg-green-50 border border-green-200 rounded-lg p-4 flex items-start gap-3">
-          <CheckCircle className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
-          <div>
-            <h4 className="text-green-800 font-medium">
-              ¡Novedad creada exitosamente!
-            </h4>
-            <p className="text-green-700 text-sm mt-1">
-              Redirigiendo al dashboard...
-            </p>
-          </div>
-        </div>
-      )}
-
-      {/* Error general */}
-      {errors.submit && (
-        <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3">
-          <AlertCircle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
-          <div>
-            <h4 className="text-red-800 font-medium">Error</h4>
-            <p className="text-red-700 text-sm mt-1">{errors.submit}</p>
-          </div>
-        </div>
-      )}
-
-      {/* Formulario */}
-      <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Información Básica */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <h2 className="text-xl font-semibold text-gray-800 mb-4 flex items-center gap-2">
-            <Tag className="h-5 w-5" />
-            Información Básica
-          </h2>
-
-          <div className="space-y-4">
-            {/* Título */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Título <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
+          <FormSection title="Información básica">
+            <Field
+              label="Título"
+              htmlFor="titulo"
+              required
+              error={errors.titulo}
+              hint={`${formData.titulo.length}/200`}
+              className="md:col-span-2"
+            >
+              <TextInput
+                id="titulo"
                 name="titulo"
                 value={formData.titulo}
                 onChange={handleInputChange}
                 maxLength={200}
-                className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent ${
-                  errors.titulo ? "border-red-500" : "border-gray-300"
-                }`}
                 placeholder="Ej: Nuevo Modelo de Camión Disponible"
+                invalid={Boolean(errors.titulo)}
               />
-              <div className="flex justify-between mt-1">
-                {errors.titulo && (
-                  <p className="text-red-500 text-sm">{errors.titulo}</p>
-                )}
-                <p className="text-gray-500 text-sm ml-auto">
-                  {formData.titulo.length}/200
-                </p>
-              </div>
-            </div>
+            </Field>
 
-            {/* Resumen */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Resumen
-              </label>
-              <textarea
+            <Field
+              label="Resumen"
+              htmlFor="resumen"
+              error={errors.resumen}
+              hint={
+                errors.resumen ? undefined : `${formData.resumen.length}/500 (opcional)`
+              }
+              className="md:col-span-2"
+            >
+              <TextareaField
+                id="resumen"
                 name="resumen"
                 value={formData.resumen}
                 onChange={handleInputChange}
                 maxLength={500}
                 rows={3}
-                className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent ${
-                  errors.resumen ? "border-red-500" : "border-gray-300"
-                }`}
                 placeholder="Breve resumen de la novedad (opcional)"
+                invalid={Boolean(errors.resumen)}
               />
-              <div className="flex justify-between mt-1">
-                {errors.resumen && (
-                  <p className="text-red-500 text-sm">{errors.resumen}</p>
-                )}
-                <p className="text-gray-500 text-sm ml-auto">
-                  {formData.resumen.length}/500
-                </p>
-              </div>
-            </div>
+            </Field>
 
-            {/* Contenido */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Contenido <span className="text-red-500">*</span>
-              </label>
-              <textarea
+            <Field
+              label="Contenido"
+              htmlFor="contenido"
+              required
+              error={errors.contenido}
+              hint={errors.contenido ? undefined : `${formData.contenido.length} caracteres`}
+              className="md:col-span-2"
+            >
+              <TextareaField
+                id="contenido"
                 name="contenido"
                 value={formData.contenido}
                 onChange={handleInputChange}
                 rows={12}
-                className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent font-mono text-sm ${
-                  errors.contenido ? "border-red-500" : "border-gray-300"
-                }`}
                 placeholder="Contenido completo de la novedad..."
+                invalid={Boolean(errors.contenido)}
               />
-              {errors.contenido && (
-                <p className="text-red-500 text-sm mt-1">{errors.contenido}</p>
-              )}
-              <p className="text-gray-500 text-sm mt-1">
-                {formData.contenido.length} caracteres
-              </p>
-            </div>
-          </div>
-        </div>
+            </Field>
+          </FormSection>
 
-        {/* Categorización y Opciones */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <h2 className="text-xl font-semibold text-gray-800 mb-4 flex items-center gap-2">
-            <Tag className="h-5 w-5" />
-            Categorización y Opciones
-          </h2>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Categoría */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Categoría
-              </label>
+          <FormSection title="Categorización y opciones">
+            <Field label="Categoría" htmlFor="categoria" error={errors.categoria}>
               {!showCategoriaInput ? (
                 <div className="space-y-2">
-                  <select
+                  <SelectField
+                    id="categoria"
                     name="categoria"
                     value={formData.categoria}
                     onChange={handleInputChange}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
                   >
                     <option value="">Sin categoría</option>
                     {categorias.map((cat) => (
@@ -426,30 +399,27 @@ export default function CrearNovedadPage() {
                         {cat}
                       </option>
                     ))}
-                    {/* Mostrar categoría nueva si no está en la lista */}
                     {formData.categoria &&
                       !categorias.includes(formData.categoria) && (
                         <option value={formData.categoria}>
                           {formData.categoria} (nueva)
                         </option>
                       )}
-                  </select>
+                  </SelectField>
                   <button
                     type="button"
                     onClick={() => setShowCategoriaInput(true)}
-                    className="text-sm text-cyan-600 hover:text-cyan-700"
+                    className="text-[16px] font-semibold text-gray-700 transition-colors duration-150 hover:text-gray-900 hover:underline"
                   >
                     + Crear nueva categoría
                   </button>
                 </div>
               ) : (
                 <div className="flex gap-2">
-                  <input
-                    type="text"
+                  <TextInput
                     value={nuevaCategoria}
                     onChange={(e) => setNuevaCategoria(e.target.value)}
                     maxLength={100}
-                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
                     placeholder="Nueva categoría"
                     onKeyDown={(e) => {
                       if (e.key === "Enter") {
@@ -458,315 +428,209 @@ export default function CrearNovedadPage() {
                       }
                     }}
                   />
-                  <button
-                    type="button"
-                    onClick={handleAddCategoria}
-                    className="px-4 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700"
-                  >
+                  <AdminButton variant="primary" onClick={handleAddCategoria}>
                     Agregar
-                  </button>
-                  <button
-                    type="button"
+                  </AdminButton>
+                  <AdminButton
+                    variant="secondary"
+                    icon={X}
+                    ariaLabel="Cancelar nueva categoría"
                     onClick={() => {
                       setShowCategoriaInput(false);
                       setNuevaCategoria("");
                     }}
-                    className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
-              )}
-              {errors.categoria && (
-                <p className="text-red-500 text-sm mt-1">{errors.categoria}</p>
-              )}
-            </div>
-
-            {/* Fecha de Publicación */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Fecha de Publicación
-              </label>
-              <div className="relative">
-                <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
-                <input
-                  type="date"
-                  name="fechaPublicacion"
-                  value={formData.fechaPublicacion}
-                  onChange={handleInputChange}
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
-                />
-              </div>
-            </div>
-
-            {/* Destacada */}
-            <div className="flex items-center gap-3 p-4 border border-gray-200 rounded-lg">
-              <input
-                type="checkbox"
-                id="destacada"
-                name="destacada"
-                checked={formData.destacada}
-                onChange={handleCheckboxChange}
-                className="w-5 h-5 text-yellow-600 border-gray-300 rounded focus:ring-yellow-500"
-              />
-              <label
-                htmlFor="destacada"
-                className="flex items-center gap-2 cursor-pointer"
-              >
-                <Star className="h-5 w-5 text-yellow-600" />
-                <div>
-                  <p className="text-sm font-medium text-gray-700">
-                    Marcar como destacada
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    Aparecerá en la portada principal
-                  </p>
-                </div>
-              </label>
-            </div>
-          </div>
-        </div>
-
-        {/* Imágenes */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <h2 className="text-xl font-semibold text-gray-800 mb-4 flex items-center gap-2">
-            <ImageIcon className="h-5 w-5" />
-            Imágenes (Máximo 10)
-          </h2>
-
-          {/* Botón de upload */}
-          <div className="mb-4">
-            <label className="cursor-pointer">
-              <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-cyan-500 hover:bg-cyan-50 transition-colors">
-                <Upload className="h-12 w-12 text-gray-400 mx-auto mb-3" />
-                <p className="text-gray-600 font-medium mb-1">
-                  Click para seleccionar imágenes
-                </p>
-                <p className="text-gray-500 text-sm">
-                  PNG, JPG, WEBP (máximo 10 imágenes)
-                </p>
-              </div>
-              <input
-                type="file"
-                accept="image/*"
-                multiple
-                onChange={handleImageSelect}
-                className="hidden"
-              />
-            </label>
-            {errors.imagenes && (
-              <p className="text-red-500 text-sm mt-2">{errors.imagenes}</p>
-            )}
-          </div>
-
-          {/* Preview de imágenes */}
-          {imageFiles.length > 0 && (
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-              {imageFiles.map((preview, index) => (
-                <div key={index} className="relative group">
-                  <Image
-                    src={preview.url}
-                    alt={`Preview ${index + 1}`}
-                    width={200}
-                    height={200}
-                    className="w-full h-40 object-cover rounded-lg border border-gray-200"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => removeImage(index)}
-                    className="absolute top-2 right-2 p-1 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                  <div className="absolute bottom-2 left-2 px-2 py-1 bg-black bg-opacity-60 text-white text-xs rounded">
-                    Imagen {index + 1}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {imageFiles.length === 0 && (
-            <div className="text-center py-8 text-gray-500">
-              <ImageIcon className="h-12 w-12 text-gray-300 mx-auto mb-2" />
-              <p>No hay imágenes seleccionadas</p>
-            </div>
-          )}
-        </div>
-
-        {/* Enlaces/Links Externos */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold text-gray-800 flex items-center gap-2">
-              <LinkIcon className="h-5 w-5" />
-              Enlaces Externos
-            </h2>
-            <button
-              type="button"
-              onClick={() => setShowLinkForm(!showLinkForm)}
-              className="px-4 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 transition-colors flex items-center gap-2"
-            >
-              <Plus className="h-4 w-4" />
-              Agregar Enlace
-            </button>
-          </div>
-
-          <p className="text-sm text-gray-600 mb-4">
-            Agrega enlaces a formularios, documentos, videos, páginas web, etc.
-          </p>
-
-          {/* Formulario para agregar link */}
-          {showLinkForm && (
-            <div className="mb-6 p-4 border border-gray-200 rounded-lg bg-gray-50">
-              <h3 className="font-medium text-gray-800 mb-3">Nuevo Enlace</h3>
-              <div className="space-y-3">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Título del Enlace <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    name="titulo"
-                    value={currentLink.titulo}
-                    onChange={handleLinkInputChange}
-                    maxLength={200}
-                    placeholder="Ej: Formulario de Contacto"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
-                  />
-                  <p className="text-gray-500 text-xs mt-1">
-                    {currentLink.titulo.length}/200
-                  </p>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    URL <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="url"
-                    name="url"
-                    value={currentLink.url}
-                    onChange={handleLinkInputChange}
-                    placeholder="https://ejemplo.com/formulario"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Descripción (Opcional)
-                  </label>
-                  <textarea
-                    name="descripcion"
-                    value={currentLink.descripcion}
-                    onChange={handleLinkInputChange}
-                    maxLength={500}
-                    rows={2}
-                    placeholder="Descripción breve del enlace..."
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
-                  />
-                  <p className="text-gray-500 text-xs mt-1">
-                    {currentLink.descripcion.length}/500
-                  </p>
-                </div>
-
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={handleAddLink}
-                    className="px-4 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 transition-colors"
-                  >
-                    Agregar
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowLinkForm(false);
-                      setCurrentLink({ titulo: "", url: "", descripcion: "" });
-                    }}
-                    className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
                   >
                     Cancelar
-                  </button>
+                  </AdminButton>
                 </div>
-              </div>
-            </div>
-          )}
+              )}
+            </Field>
 
-          {/* Lista de links agregados */}
-          {links.length > 0 ? (
-            <div className="space-y-3">
-              {links.map((link, index) => (
-                <div
-                  key={index}
-                  className="flex items-start gap-3 p-4 border border-gray-200 rounded-lg hover:border-cyan-300 transition-colors"
+            <Field label="Fecha de publicación" htmlFor="fechaPublicacion">
+              <TextInput
+                id="fechaPublicacion"
+                name="fechaPublicacion"
+                type="date"
+                value={formData.fechaPublicacion}
+                onChange={handleInputChange}
+              />
+            </Field>
+
+            <Field
+              label="Destacada"
+              hint="Aparecerá en la portada principal del sitio."
+              className="md:col-span-2"
+            >
+              <SwitchField
+                checked={formData.destacada}
+                onChange={(checked) =>
+                  setFormData((prev) => ({ ...prev, destacada: checked }))
+                }
+                label={formData.destacada ? "Marcada como destacada" : "No destacada"}
+              />
+            </Field>
+          </FormSection>
+
+          <FormSection title="Imágenes">
+            <div className="col-span-full space-y-2">
+              <span className="text-[16px] font-semibold text-gray-800">
+                Imágenes ({imageFiles.length}/10)
+              </span>
+              <MediaUploadZone
+                previews={imagePreviews}
+                onFilesSelected={handleImageFilesSelected}
+                onRemove={(id) => removeImage(Number(id))}
+                max={10}
+                acceptedTypes={["image/jpeg", "image/png", "image/webp"]}
+                maxSizeMB={15}
+                instruccion="Arrastrá las fotos acá o hacé clic — JPG, PNG o WEBP, máximo 15 MB cada una"
+              />
+              {errors.imagenes ? (
+                <span className="flex items-start gap-1.5 text-[15px] font-medium text-red-600">
+                  <AlertCircle className="mt-0.5 size-4 shrink-0" strokeWidth={2} aria-hidden />
+                  {errors.imagenes}
+                </span>
+              ) : null}
+            </div>
+          </FormSection>
+
+          <FormSection title="Enlaces externos">
+            <div className="col-span-full space-y-4">
+              <div className="flex items-center justify-between gap-4">
+                <p className="text-[16px] text-gray-500">
+                  Agregá enlaces a formularios, documentos, videos, páginas web, etc.
+                </p>
+                <AdminButton
+                  variant="primary"
+                  icon={Plus}
+                  onClick={() => setShowLinkForm((v) => !v)}
                 >
-                  <ExternalLink className="h-5 w-5 text-cyan-600 flex-shrink-0 mt-0.5" />
-                  <div className="flex-1 min-w-0">
-                    <h4 className="font-medium text-gray-800">{link.titulo}</h4>
-                    <a
-                      href={link.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-cyan-600 hover:text-cyan-700 text-sm break-all"
-                    >
-                      {link.url}
-                    </a>
-                    {link.descripcion && (
-                      <p className="text-gray-600 text-sm mt-1">
-                        {link.descripcion}
-                      </p>
-                    )}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => removeLink(index)}
-                    className="p-1 text-red-600 hover:bg-red-50 rounded transition-colors flex-shrink-0"
+                  Agregar enlace
+                </AdminButton>
+              </div>
+
+              {showLinkForm ? (
+                <div className="grid gap-4 rounded-xl border border-gray-100 bg-gray-50 p-4 md:grid-cols-2">
+                  <Field
+                    label="Título del enlace"
+                    htmlFor="link-titulo"
+                    required
+                    hint={`${currentLink.titulo.length}/200`}
+                    className="md:col-span-2"
                   >
-                    <X className="h-4 w-4" />
-                  </button>
+                    <TextInput
+                      id="link-titulo"
+                      name="titulo"
+                      value={currentLink.titulo}
+                      onChange={handleLinkInputChange}
+                      maxLength={200}
+                      placeholder="Ej: Formulario de Contacto"
+                    />
+                  </Field>
+
+                  <Field label="URL" htmlFor="link-url" required className="md:col-span-2">
+                    <TextInput
+                      id="link-url"
+                      name="url"
+                      type="url"
+                      value={currentLink.url}
+                      onChange={handleLinkInputChange}
+                      placeholder="https://ejemplo.com/formulario"
+                    />
+                  </Field>
+
+                  <Field
+                    label="Descripción (opcional)"
+                    htmlFor="link-descripcion"
+                    hint={`${currentLink.descripcion.length}/500`}
+                    className="md:col-span-2"
+                  >
+                    <TextareaField
+                      id="link-descripcion"
+                      name="descripcion"
+                      value={currentLink.descripcion}
+                      onChange={handleLinkInputChange}
+                      maxLength={500}
+                      rows={2}
+                      placeholder="Descripción breve del enlace..."
+                    />
+                  </Field>
+
+                  <div className="flex gap-3 md:col-span-2">
+                    <AdminButton variant="primary" onClick={handleAddLink}>
+                      Agregar
+                    </AdminButton>
+                    <AdminButton
+                      variant="secondary"
+                      onClick={() => {
+                        setShowLinkForm(false);
+                        setCurrentLink({ titulo: "", url: "", descripcion: "" });
+                      }}
+                    >
+                      Cancelar
+                    </AdminButton>
+                  </div>
                 </div>
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-8 text-gray-500">
-              <LinkIcon className="h-12 w-12 text-gray-300 mx-auto mb-2" />
-              <p>No hay enlaces agregados</p>
-              <p className="text-sm mt-1">
-                Los enlaces aparecerán en la novedad para que los usuarios
-                puedan acceder rápidamente
-              </p>
-            </div>
-          )}
-        </div>
+              ) : null}
 
-        {/* Botones de acción */}
-        <div className="flex items-center justify-between gap-4 bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <Link
-            href="/admin/novedades"
-            className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-          >
-            Cancelar
-          </Link>
+              {links.length > 0 ? (
+                <div className="space-y-3">
+                  {links.map((link, index) => (
+                    <div
+                      key={index}
+                      className="flex items-start justify-between gap-4 rounded-xl border border-gray-100 bg-white p-4"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="font-semibold text-gray-900">{link.titulo}</p>
+                        <a
+                          href={link.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 break-all text-[16px] text-gray-700 hover:text-gray-900 hover:underline"
+                        >
+                          <ExternalLink className="size-4 shrink-0" strokeWidth={2} aria-hidden />
+                          {link.url}
+                        </a>
+                        {link.descripcion ? (
+                          <p className="mt-1 text-[16px] text-gray-500">{link.descripcion}</p>
+                        ) : null}
+                      </div>
+                      <AdminButton
+                        variant="danger"
+                        icon={X}
+                        className="h-10 border border-red-100 bg-red-50 px-4 text-[15px] text-red-600 hover:bg-red-100"
+                        onClick={() => removeLink(index)}
+                        ariaLabel={`Quitar enlace ${link.titulo}`}
+                      >
+                        Quitar
+                      </AdminButton>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-[16px] text-gray-500">
+                  No hay enlaces agregados. Los enlaces aparecerán en la novedad para
+                  que los usuarios puedan acceder rápidamente.
+                </p>
+              )}
+            </div>
+          </FormSection>
 
-          <button
-            type="submit"
-            disabled={loading || success}
-            className="px-6 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-          >
-            {loading ? (
-              <>
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                Creando...
-              </>
-            ) : (
-              <>
-                <Save className="h-4 w-4" />
-                Crear Novedad
-              </>
-            )}
-          </button>
-        </div>
+          <div className="col-span-full flex justify-end gap-3 border-t border-gray-100 pt-6">
+            <AdminButton variant="secondary" href="/admin/novedades">
+              Cancelar
+            </AdminButton>
+            <AdminButton
+              type="submit"
+              variant="primary"
+              icon={loading ? Loader2 : Save}
+              disabled={loading || success}
+              className={loading ? "[&_svg]:animate-spin" : undefined}
+            >
+              {loading ? "Creando novedad..." : "Crear novedad"}
+            </AdminButton>
+          </div>
+        </FormShell>
       </form>
     </div>
   );

@@ -241,10 +241,11 @@ export const novedadAdminService = {
       formData.append("categoria", novedad.categoria);
     }
 
-    // Destacada: enviar como string true/false (igual que otros módulos)
-    if (novedad.destacada !== undefined) {
-      formData.append("destacada", novedad.destacada.toString());
-    }
+    // Destacada: el backend usa class-transformer con enableImplicitConversion,
+    // que castea con Boolean(value) — Boolean("false") da true (bug). El único
+    // string que castea correctamente a false es "" (Boolean("") === false),
+    // así que nunca se manda el literal "false".
+    formData.append("destacada", novedad.destacada ? "true" : "");
 
     // Fecha: enviar como ISO string (igual que Vehículos y Usados)
     if (novedad.fechaPublicacion) {
@@ -309,8 +310,12 @@ export const novedadAdminService = {
       formData.append("categoria", updates.categoria);
     }
 
+    // Ver nota en createWithMedia: nunca mandar el literal "false" (el backend
+    // lo castea a true). "" castea correctamente a false y sí persiste el
+    // cambio (a diferencia de omitir el campo, que en un PATCH via Mongoose
+    // deja el valor anterior intacto).
     if (updates.destacada !== undefined) {
-      formData.append("destacada", updates.destacada.toString());
+      formData.append("destacada", updates.destacada ? "true" : "");
     }
 
     if (updates.fechaPublicacion !== undefined) {

@@ -1,27 +1,33 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import {
-  Car,
-  ArrowLeft,
-  Save,
-  AlertCircle,
-  RefreshCw,
-  Trash2,
-  X,
-  Upload,
-  Image as ImageIcon,
-  Settings,
-} from "lucide-react";
-import Link from "next/link";
-import Image from "next/image";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { Save, Loader2, AlertCircle, Trash2, Image as ImageIcon } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { usadosService } from "@/services";
-import { Usados, MediaFile } from "@/types";
+import { MediaFile } from "@/types";
 import {
   DynamicUsadosAutocomplete,
   DynamicUsadosModeloAutocomplete,
 } from "@/components/dynamic-usados-autocomplete";
+import {
+  AdminButton,
+  AutocompleteFieldShell,
+  Breadcrumb,
+  ConfirmDialog,
+  DraftBanner,
+  Field,
+  FormSection,
+  FormShell,
+  mapApiError,
+  MediaUploadZone,
+  type MediaPreview,
+  SelectField,
+  TextareaField,
+  TextInput,
+  useFormDraft,
+  useToast,
+  useUnsavedGuard,
+} from "@/components/admin/kit";
 
 interface FormData {
   titulo: string;
@@ -56,52 +62,84 @@ interface FormErrors {
   [key: string]: string;
 }
 
+const EQUIPAMIENTO_OPCIONES = [
+  "ABS",
+  "Airbags frontales",
+  "Airbags laterales",
+  "Aire acondicionado",
+  "Alarma",
+  "Bluetooth",
+  "Cámara de retroceso",
+  "Cierre centralizado",
+  "Control de crucero",
+  "Control de estabilidad",
+  "Control de tracción",
+  "Cristales eléctricos",
+  "Dirección asistida",
+  "Espejos eléctricos",
+  "Faros antiniebla",
+  "Llantas de aleación",
+  "Sensor de estacionamiento",
+  "Techo solar",
+];
+
+const INITIAL_FORM_DATA: FormData = {
+  titulo: "",
+  marca: "",
+  modelo: "",
+  anio: new Date().getFullYear().toString(),
+  kilometraje: "",
+  estado: "Disponible",
+  version: "",
+  tipoVehiculo: "",
+  tipoCombustible: "",
+  motor: "",
+  transmision: "",
+  traccion: "",
+  potencia: "",
+  cilindrada: "",
+  capacidadCarga: "",
+  sistemaFrenado: "",
+  color: "",
+  cantidadPuertas: "",
+  cantidadAsientos: "",
+  descripcion: "",
+};
+
+type DraftShape = {
+  formData: FormData;
+  equipamiento: string[];
+};
+
+const AUTOCOMPLETE_CLASSNAME =
+  "h-11 w-full rounded-lg border border-gray-200 bg-white px-3.5 text-[16px] text-gray-900 placeholder:text-gray-400 transition-[border-color,box-shadow] duration-150 focus:border-gray-900 focus:ring-4 focus:ring-gray-900/5 focus:outline-none focus-visible:outline-none";
+
 export default function EditarUsados() {
   const params = useParams();
   const router = useRouter();
   const usadosId = params?.id as string;
+  const { showToast } = useToast();
 
   // Estados principales
-  const [usados, setUsados] = useState<Usados | null>(null);
+  const [tituloActual, setTituloActual] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Estados del formulario
-  const [formData, setFormData] = useState<FormData>({
-    titulo: "",
-    marca: "",
-    modelo: "",
-    anio: new Date().getFullYear().toString(),
-    kilometraje: "",
-    estado: "Disponible",
-    version: "",
-    tipoVehiculo: "",
-    tipoCombustible: "",
-    motor: "",
-    transmision: "",
-    traccion: "",
-    potencia: "",
-    cilindrada: "",
-    capacidadCarga: "",
-    sistemaFrenado: "",
-    color: "",
-    cantidadPuertas: "",
-    cantidadAsientos: "",
-    descripcion: "",
-  });
+  const [formData, setFormData] = useState<FormData>(INITIAL_FORM_DATA);
 
   // Estados de archivos
   const [existingImages, setExistingImages] = useState<MediaFile[]>([]);
   const [existingVideos, setExistingVideos] = useState<MediaFile[]>([]);
-  const [existingFotoSinFondo1, setExistingFotoSinFondo1] =
-    useState<MediaFile | null>(null);
-  const [existingFotoSinFondo2, setExistingFotoSinFondo2] =
-    useState<MediaFile | null>(null);
+  const [existingFotoSinFondo1, setExistingFotoSinFondo1] = useState<MediaFile | null>(null);
+  const [existingFotoSinFondo2, setExistingFotoSinFondo2] = useState<MediaFile | null>(null);
   const [newImageFiles, setNewImageFiles] = useState<FilePreview[]>([]);
   const [newVideoFiles, setNewVideoFiles] = useState<FilePreview[]>([]);
   const [newFotoSinFondo1, setNewFotoSinFondo1] = useState<File | null>(null);
   const [newFotoSinFondo2, setNewFotoSinFondo2] = useState<File | null>(null);
+  const [fotoSinFondo1Preview, setFotoSinFondo1Preview] = useState<string | null>(null);
+  const [fotoSinFondo2Preview, setFotoSinFondo2Preview] = useState<string | null>(null);
   const [imagesToDelete, setImagesToDelete] = useState<string[]>([]);
   const [videosToDelete, setVideosToDelete] = useState<string[]>([]);
   const [deleteFotoSinFondo1, setDeleteFotoSinFondo1] = useState(false);
@@ -112,6 +150,8 @@ export default function EditarUsados() {
   const [errors, setErrors] = useState<FormErrors>({});
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
+  const loadedSnapshotRef = useRef<string | null>(null);
+
   // Cargar datos del vehículo usado
   const loadUsados = useCallback(async () => {
     try {
@@ -120,15 +160,21 @@ export default function EditarUsados() {
 
       const data = await usadosService.getUsadosById(usadosId);
 
-      setUsados(data);
+      setTituloActual(data.titulo || `${data.marca} ${data.modelo}`);
       setExistingImages(data.imagenes || []);
       setExistingVideos(data.videos || []);
       setExistingFotoSinFondo1(data.fotoSinFondo1 || null);
       setExistingFotoSinFondo2(data.fotoSinFondo2 || null);
-      setEquipamiento(data.equipamiento || []);
+      setImagesToDelete([]);
+      setVideosToDelete([]);
+      setDeleteFotoSinFondo1(false);
+      setDeleteFotoSinFondo2(false);
+
+      const loadedEquipamiento = data.equipamiento || [];
+      setEquipamiento(loadedEquipamiento);
 
       // Pre-poblar formulario
-      setFormData({
+      const loadedFormData: FormData = {
         titulo: data.titulo || "",
         marca: data.marca || "",
         modelo: data.modelo || "",
@@ -149,10 +195,16 @@ export default function EditarUsados() {
         cantidadPuertas: data.cantidadPuertas?.toString() || "",
         cantidadAsientos: data.cantidadAsientos?.toString() || "",
         descripcion: data.descripcion || "",
+      };
+      setFormData(loadedFormData);
+
+      loadedSnapshotRef.current = JSON.stringify({
+        formData: loadedFormData,
+        equipamiento: loadedEquipamiento,
       });
     } catch (err) {
       console.error("Error cargando vehículo usado:", err);
-      setError("Error al cargar los datos del vehículo usado");
+      setError(mapApiError(err));
     } finally {
       setLoading(false);
     }
@@ -164,18 +216,43 @@ export default function EditarUsados() {
     }
   }, [usadosId, loadUsados]);
 
+  // Borrador (elderly-first: nunca perder cambios sin guardar)
+  const { hasDraft, restoreDraft, dismissDraft, clearDraft } =
+    useFormDraft<DraftShape>(
+      `usado-editar-${usadosId}`,
+      { formData, equipamiento },
+      (draft) => {
+        setFormData(draft.formData ?? INITIAL_FORM_DATA);
+        setEquipamiento(draft.equipamiento ?? []);
+      },
+    );
+
+  const currentSnapshot = JSON.stringify({ formData, equipamiento });
+  const isDirty =
+    !loading &&
+    loadedSnapshotRef.current !== null &&
+    (currentSnapshot !== loadedSnapshotRef.current ||
+      newImageFiles.length > 0 ||
+      newVideoFiles.length > 0 ||
+      Boolean(newFotoSinFondo1) ||
+      Boolean(newFotoSinFondo2) ||
+      imagesToDelete.length > 0 ||
+      videosToDelete.length > 0 ||
+      deleteFotoSinFondo1 ||
+      deleteFotoSinFondo2);
+
+  useUnsavedGuard(isDirty);
+
   // Validaciones
   const validateForm = (): boolean => {
     const newErrors: FormErrors = {};
 
-    // Campos requeridos
     if (!formData.marca.trim()) newErrors.marca = "La marca es requerida";
     if (!formData.modelo.trim()) newErrors.modelo = "El modelo es requerido";
     if (!formData.anio.trim()) newErrors.anio = "El año es requerido";
     if (!formData.kilometraje.trim())
       newErrors.kilometraje = "El kilometraje es requerido";
 
-    // Validar año
     const currentYear = new Date().getFullYear();
     const year = parseInt(formData.anio);
     if (
@@ -185,12 +262,10 @@ export default function EditarUsados() {
       newErrors.anio = `El año debe estar entre 1990 y ${currentYear + 1}`;
     }
 
-    // Validar kilometraje
     if (formData.kilometraje && parseInt(formData.kilometraje) < 0) {
       newErrors.kilometraje = "El kilometraje no puede ser negativo";
     }
 
-    // Validar límites de archivos
     const totalImages =
       existingImages.filter((img) => !imagesToDelete.includes(img.public_id))
         .length + newImageFiles.length;
@@ -199,8 +274,7 @@ export default function EditarUsados() {
         .length + newVideoFiles.length;
 
     if (totalImages > 10) {
-      newErrors.imagenes =
-        "Máximo 10 imágenes permitidas (incluyendo existentes)";
+      newErrors.imagenes = "Máximo 10 imágenes permitidas (incluyendo existentes)";
     }
     if (totalVideos > 5) {
       newErrors.videos = "Máximo 5 videos permitidos (incluyendo existentes)";
@@ -212,172 +286,119 @@ export default function EditarUsados() {
 
   // Manejar cambios en inputs
   const handleInputChange = (field: keyof FormData, value: string) => {
-    console.log(`[handleInputChange] Campo: ${field}, Valor: "${value}"`);
+    setFormData((prev) => ({ ...prev, [field]: value }));
 
-    setFormData((prev) => {
-      const newData = {
-        ...prev,
-        [field]: value,
-      };
-      console.log(
-        `[handleInputChange] Nuevo formData.${field}:`,
-        newData[field]
-      );
-      return newData;
-    });
-
-    // Limpiar error del campo
     if (errors[field]) {
-      setErrors((prev) => ({
-        ...prev,
-        [field]: "",
-      }));
+      setErrors((prev) => ({ ...prev, [field]: "" }));
     }
   };
 
-  // Validar archivos nuevos
-  const validateFile = (file: File, type: "image" | "video"): string | null => {
-    const maxSizes = {
-      image: 20 * 1024 * 1024, // 20MB (actualizado para Cloudinary)
-      video: 50 * 1024 * 1024, // 50MB
-    };
+  // Manejo de archivos — adaptador mínimo: MediaUploadZone entrega File[] ya comprimidos.
+  const handleImageFilesSelected = (files: File[]) => {
+    const currentTotal =
+      existingImages.filter((img) => !imagesToDelete.includes(img.public_id)).length +
+      newImageFiles.length;
 
-    const allowedFormats = {
-      image: ["image/jpeg", "image/jpg", "image/png", "image/webp"],
-      video: ["video/mp4", "video/mov", "video/avi"],
-    };
-
-    if (file.size > maxSizes[type]) {
-      return `El archivo excede el tamaño máximo de ${
-        type === "image" ? "20MB" : "50MB"
-      }`;
-    }
-
-    if (!allowedFormats[type].includes(file.type)) {
-      return `Formato no permitido. Use: ${allowedFormats[type].join(", ")}`;
-    }
-
-    return null;
-  };
-
-  // Agregar nuevas imágenes
-  const handleNewImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(event.target.files || []);
-    const currentTotal = existingImages.filter(
-      (img) => !imagesToDelete.includes(img.public_id)
-    ).length;
-
-    if (currentTotal + newImageFiles.length + files.length > 10) {
+    if (currentTotal + files.length > 10) {
       setErrors((prev) => ({
         ...prev,
-        imagenes: "Máximo 10 imágenes permitidas",
+        imagenes: "Máximo 10 imágenes permitidas (incluyendo existentes)",
       }));
       return;
     }
 
     const validFiles: FilePreview[] = [];
-
     files.forEach((file) => {
-      const error = validateFile(file, "image");
-      if (error) {
+      if (file.size > 20 * 1024 * 1024) {
         setErrors((prev) => ({
           ...prev,
-          imagenes: error,
+          imagenes: "Las imágenes no pueden superar 20MB",
         }));
         return;
       }
-
-      validFiles.push({
-        file,
-        url: URL.createObjectURL(file),
-        type: "image",
-      });
+      validFiles.push({ file, url: URL.createObjectURL(file), type: "image" });
     });
 
     setNewImageFiles((prev) => [...prev, ...validFiles]);
 
     if (errors.imagenes) {
-      setErrors((prev) => ({
-        ...prev,
-        imagenes: "",
-      }));
+      setErrors((prev) => ({ ...prev, imagenes: "" }));
     }
   };
 
-  // Agregar nuevos videos
-  const handleNewVideoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(event.target.files || []);
-    const currentTotal = existingVideos.filter(
-      (vid) => !videosToDelete.includes(vid.public_id)
-    ).length;
+  const handleVideoFilesSelected = (files: File[]) => {
+    const currentTotal =
+      existingVideos.filter((vid) => !videosToDelete.includes(vid.public_id)).length +
+      newVideoFiles.length;
 
-    if (currentTotal + newVideoFiles.length + files.length > 5) {
+    if (currentTotal + files.length > 5) {
       setErrors((prev) => ({
         ...prev,
-        videos: "Máximo 5 videos permitidos",
+        videos: "Máximo 5 videos permitidos (incluyendo existentes)",
       }));
       return;
     }
 
     const validFiles: FilePreview[] = [];
-
     files.forEach((file) => {
-      const error = validateFile(file, "video");
-      if (error) {
+      if (file.size > 50 * 1024 * 1024) {
         setErrors((prev) => ({
           ...prev,
-          videos: error,
+          videos: "Los videos no pueden superar 50MB",
         }));
         return;
       }
-
-      validFiles.push({
-        file,
-        url: URL.createObjectURL(file),
-        type: "video",
-      });
+      validFiles.push({ file, url: URL.createObjectURL(file), type: "video" });
     });
 
     setNewVideoFiles((prev) => [...prev, ...validFiles]);
 
     if (errors.videos) {
-      setErrors((prev) => ({
-        ...prev,
-        videos: "",
-      }));
+      setErrors((prev) => ({ ...prev, videos: "" }));
     }
   };
 
-  // Marcar imagen existente para eliminar
+  // Marcar imagen/video existente para eliminar
   const markExistingImageForDeletion = (publicId: string) => {
-    setImagesToDelete((prev) =>
-      prev.includes(publicId)
-        ? prev.filter((id) => id !== publicId)
-        : [...prev, publicId]
-    );
+    setImagesToDelete((prev) => (prev.includes(publicId) ? prev : [...prev, publicId]));
+    if (errors.imagenes) {
+      setErrors((prev) => ({ ...prev, imagenes: "" }));
+    }
   };
 
-  // Marcar video existente para eliminar
   const markExistingVideoForDeletion = (publicId: string) => {
-    setVideosToDelete((prev) =>
-      prev.includes(publicId)
-        ? prev.filter((id) => id !== publicId)
-        : [...prev, publicId]
-    );
+    setVideosToDelete((prev) => (prev.includes(publicId) ? prev : [...prev, publicId]));
+    if (errors.videos) {
+      setErrors((prev) => ({ ...prev, videos: "" }));
+    }
   };
 
   // Remover archivo nuevo
   const removeNewFile = (index: number, type: "image" | "video") => {
     if (type === "image") {
-      const newFiles = [...newImageFiles];
-      URL.revokeObjectURL(newFiles[index].url);
-      newFiles.splice(index, 1);
-      setNewImageFiles(newFiles);
+      const files = [...newImageFiles];
+      URL.revokeObjectURL(files[index].url);
+      files.splice(index, 1);
+      setNewImageFiles(files);
     } else {
-      const newFiles = [...newVideoFiles];
-      URL.revokeObjectURL(newFiles[index].url);
-      newFiles.splice(index, 1);
-      setNewVideoFiles(newFiles);
+      const files = [...newVideoFiles];
+      URL.revokeObjectURL(files[index].url);
+      files.splice(index, 1);
+      setNewVideoFiles(files);
+    }
+  };
+
+  const handleSlotSelected = (
+    slot: "fotoSinFondo1" | "fotoSinFondo2",
+    file: File,
+  ) => {
+    const url = URL.createObjectURL(file);
+    if (slot === "fotoSinFondo1") {
+      setNewFotoSinFondo1(file);
+      setFotoSinFondo1Preview(url);
+    } else {
+      setNewFotoSinFondo2(file);
+      setFotoSinFondo2Preview(url);
     }
   };
 
@@ -394,15 +415,6 @@ export default function EditarUsados() {
     try {
       // Preparar FormData para actualización con multimedia
       const apiFormData = new FormData();
-
-      // DEBUG: Verificar el valor del año antes de enviar
-      console.log("=== DEBUG GUARDAR USADO ===");
-      console.log(
-        "formData.anio:",
-        formData.anio,
-        "tipo:",
-        typeof formData.anio
-      );
 
       // Campos obligatorios
       apiFormData.append("marca", formData.marca);
@@ -479,8 +491,6 @@ export default function EditarUsados() {
         apiFormData.append("eliminarFotoSinFondo2", "true");
       }
 
-      console.log("🔍 Actualizando vehículo...");
-
       // Actualizar vehículo usado con multimedia
       await usadosService.updateUsadosWithMedia(usadosId, apiFormData);
 
@@ -488,37 +498,32 @@ export default function EditarUsados() {
       newImageFiles.forEach((file) => URL.revokeObjectURL(file.url));
       newVideoFiles.forEach((file) => URL.revokeObjectURL(file.url));
 
+      clearDraft();
+
       // Redirigir al dashboard con mensaje de éxito
       router.push("/admin/usados?updated=true");
     } catch (error: unknown) {
       const err = error as {
         response?: { data?: { message?: string | string[]; error?: string } };
       };
-      console.error("❌ Error actualizando vehículo usado:", error);
-      console.error("📋 Respuesta del servidor:", err.response?.data);
+      console.error("Error actualizando vehículo usado:", error);
+      console.error("Respuesta del servidor:", err.response?.data);
 
-      // Limpiar errores anteriores
       const fieldErrors: FormErrors = {};
 
-      // Extraer mensajes de error
       if (err.response?.data?.message) {
         const messages = err.response.data.message;
 
         if (Array.isArray(messages)) {
-          // Parsear errores de validación y asignarlos a campos específicos
-          console.error("🔍 Errores de validación:", messages);
-
           const generalErrors: string[] = [];
 
           messages.forEach((msg: string) => {
-            // Parsear mensajes como "property marca should not be empty"
             const fieldMatch = msg.match(/property (\w+) (.+)/);
 
             if (fieldMatch) {
               const fieldName = fieldMatch[1];
               const errorMsg = fieldMatch[2];
 
-              // Traducir algunos mensajes comunes
               let translatedMsg = errorMsg;
               if (errorMsg.includes("should not be empty"))
                 translatedMsg = "Este campo es requerido";
@@ -535,12 +540,10 @@ export default function EditarUsados() {
             }
           });
 
-          // Si hay errores generales, mostrarlos también
           if (generalErrors.length > 0) {
             fieldErrors.submit = generalErrors.join("\n• ");
           }
 
-          // Si solo hay errores de campo, mostrar mensaje general
           if (
             Object.keys(fieldErrors).length > 0 &&
             generalErrors.length === 0
@@ -549,7 +552,6 @@ export default function EditarUsados() {
               "Por favor, corrige los errores en el formulario";
           }
         } else {
-          // Error simple
           fieldErrors.submit = messages;
         }
       } else if (err.response?.data?.error) {
@@ -561,6 +563,11 @@ export default function EditarUsados() {
       }
 
       setErrors(fieldErrors);
+      showToast({
+        title: "No se pudieron guardar los cambios",
+        message: mapApiError(error),
+        variant: "danger",
+      });
     } finally {
       setSaving(false);
     }
@@ -572,16 +579,16 @@ export default function EditarUsados() {
       setSaving(true);
       await usadosService.deleteUsados(usadosId);
 
-      // Limpiar URLs de objetos
       newImageFiles.forEach((file) => URL.revokeObjectURL(file.url));
       newVideoFiles.forEach((file) => URL.revokeObjectURL(file.url));
 
       router.push("/admin/usados?deleted=true");
     } catch (err) {
       console.error("Error eliminando vehículo usado:", err);
-      setErrors({
-        submit:
-          "Error al eliminar el vehículo usado. Por favor, inténtelo nuevamente.",
+      showToast({
+        title: "No se pudo eliminar el vehículo usado",
+        message: mapApiError(err),
+        variant: "danger",
       });
     } finally {
       setSaving(false);
@@ -589,122 +596,140 @@ export default function EditarUsados() {
     }
   };
 
-  // Estado de carga
+  // previews combinadas: media ya subida (Cloudinary) + archivos nuevos.
+  const imagePreviews: MediaPreview[] = [
+    ...existingImages
+      .filter((img) => !imagesToDelete.includes(img.public_id))
+      .map((img) => ({
+        id: `existing:${img.public_id}`,
+        url: img.secure_url,
+        type: "image" as const,
+      })),
+    ...newImageFiles.map((f, idx) => ({
+      id: `new:${idx}`,
+      url: f.url,
+      type: "image" as const,
+    })),
+  ];
+
+  const videoPreviews: MediaPreview[] = [
+    ...existingVideos
+      .filter((vid) => !videosToDelete.includes(vid.public_id))
+      .map((vid) => ({
+        id: `existing:${vid.public_id}`,
+        url: vid.secure_url,
+        type: "video" as const,
+      })),
+    ...newVideoFiles.map((f, idx) => ({
+      id: `new:${idx}`,
+      url: f.url,
+      type: "video" as const,
+    })),
+  ];
+
+  const handleRemoveImagePreview = (id: string) => {
+    if (id.startsWith("existing:")) {
+      markExistingImageForDeletion(id.slice("existing:".length));
+    } else {
+      removeNewFile(Number(id.slice("new:".length)), "image");
+    }
+  };
+
+  const handleRemoveVideoPreview = (id: string) => {
+    if (id.startsWith("existing:")) {
+      markExistingVideoForDeletion(id.slice("existing:".length));
+    } else {
+      removeNewFile(Number(id.slice("new:".length)), "video");
+    }
+  };
+
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <RefreshCw className="h-12 w-12 text-cyan-600 animate-spin mx-auto mb-4" />
-          <p className="text-gray-600">Cargando datos del vehículo usado...</p>
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <div className="flex items-center gap-3 text-[16px] text-gray-500">
+          <Loader2 className="size-6 animate-spin text-gray-400" strokeWidth={2} aria-hidden />
+          Cargando vehículo usado...
         </div>
       </div>
     );
   }
 
-  // Error al cargar
-  if (error || !usados) {
+  if (error) {
     return (
-      <div className="p-6">
-        <div className="bg-red-50 border border-red-200 rounded-lg p-6 flex items-start gap-4">
-          <AlertCircle className="h-6 w-6 text-red-600 flex-shrink-0 mt-1" />
-          <div className="flex-1">
-            <h3 className="text-red-800 font-semibold text-lg mb-2">
-              Error al cargar el vehículo usado
-            </h3>
-            <p className="text-red-700">{error}</p>
-            <div className="mt-4 flex gap-3">
-              <button
-                onClick={loadUsados}
-                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center gap-2"
-              >
-                <RefreshCw className="h-4 w-4" />
-                Reintentar
-              </button>
-              <Link
-                href="/admin/usados"
-                className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
-              >
-                Volver al Dashboard
-              </Link>
-            </div>
-          </div>
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <div className="max-w-md space-y-4 rounded-2xl border border-red-100 bg-white p-6 text-center shadow-sm">
+          <h2 className="text-[20px] font-semibold text-gray-900">
+            No pudimos cargar el vehículo usado
+          </h2>
+          <p className="text-[16px] text-gray-500">{error}</p>
+          <AdminButton variant="primary" onClick={loadUsados}>
+            Reintentar
+          </AdminButton>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="p-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-center gap-4">
-        <Link
-          href="/admin/usados"
-          className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-        >
-          <ArrowLeft className="h-5 w-5 text-gray-600" />
-        </Link>
-        <div className="flex-1">
-          <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-3">
-            <Car className="h-6 w-6 text-cyan-600" />
-            Editar Vehículo Usado
-          </h1>
-          <p className="text-gray-600 mt-1">
-            {usados.titulo || `${usados.marca} ${usados.modelo}`}
-          </p>
-        </div>
+    <div className="space-y-8">
+      <Breadcrumb
+        items={[
+          { label: "Usados", href: "/admin/usados" },
+          { label: "Editar vehículo usado" },
+        ]}
+      />
 
-        <button
-          type="button"
+      <div className="flex items-end justify-between gap-6">
+        <div>
+          <h1 className="text-[26px] font-semibold tracking-[-0.01em] text-gray-900">Editar vehículo usado</h1>
+          <p className="mt-1.5 text-[16px] text-gray-500">{tituloActual}</p>
+        </div>
+        <AdminButton
+          variant="danger"
+          icon={Trash2}
+          className="rounded-lg border border-red-100 bg-red-50 text-red-600 hover:bg-red-100"
           onClick={() => setShowDeleteConfirm(true)}
-          className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center gap-2"
         >
-          <Trash2 className="h-4 w-4" />
           Eliminar
-        </button>
+        </AdminButton>
       </div>
 
-      {/* Errores globales */}
-      {errors.submit && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3">
-          <AlertCircle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
+      {hasDraft ? (
+        <DraftBanner onRestore={restoreDraft} onDismiss={dismissDraft} />
+      ) : null}
+
+      {errors.submit ? (
+        <div className="flex items-start gap-3 rounded-xl border border-red-100 bg-red-50 px-4 py-3">
+          <AlertCircle className="mt-0.5 size-5 shrink-0 text-red-600" strokeWidth={2} aria-hidden />
           <div>
-            <h4 className="text-red-800 font-medium">
-              Error al guardar cambios
+            <h4 className="text-[16px] font-semibold text-red-700">
+              No se pudieron guardar los cambios
             </h4>
-            <p className="text-red-700 text-sm mt-1">{errors.submit}</p>
+            <p className="whitespace-pre-line text-[15.5px] text-red-600">{errors.submit}</p>
           </div>
         </div>
-      )}
+      ) : null}
 
-      {/* Formulario de Edición */}
-      <form onSubmit={handleSubmit} className="space-y-8">
-        {/* Información Básica */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold text-gray-800 mb-6 flex items-center gap-2">
-            <Car className="h-5 w-5 text-cyan-600" />
-            Información Básica del Vehículo
-          </h2>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {/* Título */}
-            <div className="lg:col-span-3">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Título del Vehículo
-              </label>
-              <input
-                type="text"
+      <form onSubmit={handleSubmit}>
+        <FormShell
+          title="Editar vehículo usado"
+          description="Modificá la información del vehículo. Los campos con * son obligatorios."
+        >
+          <FormSection title="Información básica del vehículo" index={1}>
+            <Field
+              label="Título del vehículo"
+              htmlFor="titulo"
+              className="md:col-span-2"
+            >
+              <TextInput
+                id="titulo"
                 value={formData.titulo}
                 onChange={(e) => handleInputChange("titulo", e.target.value)}
                 placeholder="Ej: Toyota Hilux 2020 SRV"
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
               />
-            </div>
+            </Field>
 
-            {/* Marca */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Marca <span className="text-red-500">*</span>
-              </label>
+            <AutocompleteFieldShell label="Marca" htmlFor="marca" required error={errors.marca}>
               <DynamicUsadosAutocomplete
                 id="marca"
                 name="marca"
@@ -712,22 +737,13 @@ export default function EditarUsados() {
                 onChange={(value) => handleInputChange("marca", value)}
                 field="marcas"
                 placeholder="Escribir o seleccionar marca..."
-                isAdmin={true}
-                allowCustom={true}
-                className={`px-4 py-3 ${
-                  errors.marca ? "border-red-300 bg-red-50" : "border-gray-300"
-                }`}
+                isAdmin
+                allowCustom
+                className={`${AUTOCOMPLETE_CLASSNAME} ${errors.marca ? "border-red-500" : ""}`}
               />
-              {errors.marca && (
-                <p className="text-red-600 text-sm mt-1">{errors.marca}</p>
-              )}
-            </div>
+            </AutocompleteFieldShell>
 
-            {/* Modelo */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Modelo <span className="text-red-500">*</span>
-              </label>
+            <AutocompleteFieldShell label="Modelo" htmlFor="modelo" required error={errors.modelo}>
               <DynamicUsadosModeloAutocomplete
                 id="modelo"
                 name="modelo"
@@ -735,22 +751,13 @@ export default function EditarUsados() {
                 onChange={(value) => handleInputChange("modelo", value)}
                 marca={formData.marca}
                 placeholder="Escribir o seleccionar modelo..."
-                isAdmin={true}
-                allowCustom={true}
-                className={`px-4 py-3 ${
-                  errors.modelo ? "border-red-300 bg-red-50" : "border-gray-300"
-                }`}
+                isAdmin
+                allowCustom
+                className={`${AUTOCOMPLETE_CLASSNAME} ${errors.modelo ? "border-red-500" : ""}`}
               />
-              {errors.modelo && (
-                <p className="text-red-600 text-sm mt-1">{errors.modelo}</p>
-              )}
-            </div>
+            </AutocompleteFieldShell>
 
-            {/* Tipo de Vehículo */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Tipo de Vehículo
-              </label>
+            <AutocompleteFieldShell label="Tipo de vehículo" htmlFor="tipoVehiculo">
               <DynamicUsadosAutocomplete
                 id="tipoVehiculo"
                 name="tipoVehiculo"
@@ -758,97 +765,61 @@ export default function EditarUsados() {
                 onChange={(value) => handleInputChange("tipoVehiculo", value)}
                 field="tiposVehiculo"
                 placeholder="Escribir o seleccionar tipo..."
-                isAdmin={true}
-                allowCustom={true}
-                className="px-4 py-3"
+                isAdmin
+                allowCustom
+                className={AUTOCOMPLETE_CLASSNAME}
               />
-            </div>
+            </AutocompleteFieldShell>
 
-            {/* Año */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Año del Modelo
-              </label>
-              <input
+            <Field label="Año del modelo" htmlFor="anio" error={errors.anio}>
+              <TextInput
+                id="anio"
                 type="text"
                 inputMode="numeric"
                 pattern="[0-9]{4}"
                 maxLength={4}
                 value={formData.anio}
                 onChange={(e) => {
-                  // Solo permitir números
                   const value = e.target.value.replace(/\D/g, "");
                   if (value.length <= 4) {
                     handleInputChange("anio", value);
                   }
                 }}
                 placeholder={new Date().getFullYear().toString()}
-                className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 ${
-                  errors.anio ? "border-red-300 bg-red-50" : "border-gray-300"
-                }`}
+                invalid={Boolean(errors.anio)}
               />
-              {errors.anio && (
-                <p className="text-red-600 text-sm mt-1">{errors.anio}</p>
-              )}
-            </div>
+            </Field>
 
-            {/* Kilometraje */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Kilometraje (km)
-              </label>
-              <input
+            <Field label="Kilometraje (km)" htmlFor="kilometraje" error={errors.kilometraje}>
+              <TextInput
+                id="kilometraje"
                 type="number"
                 value={formData.kilometraje}
-                onChange={(e) =>
-                  handleInputChange("kilometraje", e.target.value)
-                }
+                onChange={(e) => handleInputChange("kilometraje", e.target.value)}
                 placeholder="Ej: 45000"
                 min="0"
-                className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 ${
-                  errors.kilometraje
-                    ? "border-red-300 bg-red-50"
-                    : "border-gray-300"
-                }`}
+                invalid={Boolean(errors.kilometraje)}
               />
-              {errors.kilometraje && (
-                <p className="text-red-600 text-sm mt-1">
-                  {errors.kilometraje}
-                </p>
-              )}
-            </div>
+            </Field>
 
-            {/* Estado del Vehículo */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Estado del Vehículo *
-              </label>
-              <select
+            <Field
+              label="Estado del vehículo"
+              htmlFor="estado"
+              required
+              hint='Solo los vehículos "Disponibles" se muestran en la página pública'
+            >
+              <SelectField
+                id="estado"
                 value={formData.estado}
                 onChange={(e) => handleInputChange("estado", e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 bg-white"
               >
-                <option value="Disponible">
-                  Disponible (Visible en página pública)
-                </option>
-                <option value="Reservado">
-                  Reservado (Oculto en página pública)
-                </option>
-                <option value="Vendido">
-                  Vendido (Oculto en página pública)
-                </option>
-              </select>
-              <p className="text-xs text-gray-500 mt-1">
-                Solo los vehículos &quot;Disponibles&quot; se muestran en la
-                página pública
-              </p>
-            </div>
+                <option value="Disponible">Disponible (Visible en página pública)</option>
+                <option value="Reservado">Reservado (Oculto en página pública)</option>
+                <option value="Vendido">Vendido (Oculto en página pública)</option>
+              </SelectField>
+            </Field>
 
-            {/* Versión */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Versión
-              </label>
+            <AutocompleteFieldShell label="Versión" htmlFor="version">
               <DynamicUsadosAutocomplete
                 id="version"
                 name="version"
@@ -856,61 +827,38 @@ export default function EditarUsados() {
                 onChange={(value) => handleInputChange("version", value)}
                 field="versiones"
                 placeholder="Ej: XLT, SRV, Limited..."
-                isAdmin={true}
-                allowCustom={true}
-                className="px-4 py-3"
+                isAdmin
+                allowCustom
+                className={AUTOCOMPLETE_CLASSNAME}
               />
-            </div>
-          </div>
-        </div>
+            </AutocompleteFieldShell>
+          </FormSection>
 
-        {/* Especificaciones Técnicas */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold text-gray-800 mb-6 flex items-center gap-2">
-            <Settings className="h-5 w-5 text-cyan-600" />
-            Especificaciones Técnicas
-          </h2>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {/* Tipo de Combustible */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Tipo de Combustible
-              </label>
+          <FormSection title="Especificaciones técnicas" index={2}>
+            <AutocompleteFieldShell label="Tipo de combustible" htmlFor="tipoCombustible">
               <DynamicUsadosAutocomplete
                 id="tipoCombustible"
                 name="tipoCombustible"
                 value={formData.tipoCombustible}
-                onChange={(value) =>
-                  handleInputChange("tipoCombustible", value)
-                }
+                onChange={(value) => handleInputChange("tipoCombustible", value)}
                 field="combustibles"
                 placeholder="Escribir o seleccionar..."
-                isAdmin={true}
-                allowCustom={true}
-                className="px-4 py-3"
+                isAdmin
+                allowCustom
+                className={AUTOCOMPLETE_CLASSNAME}
               />
-            </div>
+            </AutocompleteFieldShell>
 
-            {/* Motor */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Motor
-              </label>
-              <input
-                type="text"
+            <Field label="Motor" htmlFor="motor">
+              <TextInput
+                id="motor"
                 value={formData.motor}
                 onChange={(e) => handleInputChange("motor", e.target.value)}
                 placeholder="Ej: 2.8L Turbo"
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
               />
-            </div>
+            </Field>
 
-            {/* Transmisión */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Transmisión
-              </label>
+            <AutocompleteFieldShell label="Transmisión" htmlFor="transmision">
               <DynamicUsadosAutocomplete
                 id="transmision"
                 name="transmision"
@@ -918,17 +866,13 @@ export default function EditarUsados() {
                 onChange={(value) => handleInputChange("transmision", value)}
                 field="transmisiones"
                 placeholder="Escribir o seleccionar..."
-                isAdmin={true}
-                allowCustom={true}
-                className="px-4 py-3"
+                isAdmin
+                allowCustom
+                className={AUTOCOMPLETE_CLASSNAME}
               />
-            </div>
+            </AutocompleteFieldShell>
 
-            {/* Tracción */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Tracción
-              </label>
+            <AutocompleteFieldShell label="Tracción" htmlFor="traccion">
               <DynamicUsadosAutocomplete
                 id="traccion"
                 name="traccion"
@@ -936,157 +880,88 @@ export default function EditarUsados() {
                 onChange={(value) => handleInputChange("traccion", value)}
                 field="tracciones"
                 placeholder="Escribir o seleccionar..."
-                isAdmin={true}
-                allowCustom={true}
-                className="px-4 py-3"
+                isAdmin
+                allowCustom
+                className={AUTOCOMPLETE_CLASSNAME}
               />
-            </div>
+            </AutocompleteFieldShell>
 
-            {/* Potencia */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Potencia
-              </label>
-              <input
-                type="text"
+            <Field label="Potencia" htmlFor="potencia">
+              <TextInput
+                id="potencia"
                 value={formData.potencia}
                 onChange={(e) => handleInputChange("potencia", e.target.value)}
                 placeholder="Ej: 200 HP, 150 CV"
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
               />
-            </div>
+            </Field>
 
-            {/* Capacidad de Carga */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Capacidad de Carga
-              </label>
-              <input
-                type="text"
+            <Field label="Capacidad de carga" htmlFor="capacidadCarga">
+              <TextInput
+                id="capacidadCarga"
                 value={formData.capacidadCarga}
-                onChange={(e) =>
-                  handleInputChange("capacidadCarga", e.target.value)
-                }
+                onChange={(e) => handleInputChange("capacidadCarga", e.target.value)}
                 placeholder="Ej: 1000 kg"
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
               />
-            </div>
+            </Field>
 
-            {/* Sistema de Frenado */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Sistema de Frenado
-              </label>
-              <input
-                type="text"
+            <Field label="Sistema de frenado" htmlFor="sistemaFrenado">
+              <TextInput
+                id="sistemaFrenado"
                 value={formData.sistemaFrenado}
-                onChange={(e) =>
-                  handleInputChange("sistemaFrenado", e.target.value)
-                }
+                onChange={(e) => handleInputChange("sistemaFrenado", e.target.value)}
                 placeholder="Ej: ABS + EBD"
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
               />
-            </div>
+            </Field>
 
-            {/* Cilindrada */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Cilindrada
-              </label>
-              <input
-                type="text"
+            <Field label="Cilindrada" htmlFor="cilindrada">
+              <TextInput
+                id="cilindrada"
                 value={formData.cilindrada}
-                onChange={(e) =>
-                  handleInputChange("cilindrada", e.target.value)
-                }
+                onChange={(e) => handleInputChange("cilindrada", e.target.value)}
                 placeholder="Ej: 2.0L, 1800cc"
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
               />
-            </div>
+            </Field>
 
-            {/* Color */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Color
-              </label>
-              <input
-                type="text"
+            <Field label="Color" htmlFor="color">
+              <TextInput
+                id="color"
                 value={formData.color}
                 onChange={(e) => handleInputChange("color", e.target.value)}
                 placeholder="Ej: Blanco, Rojo"
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
               />
-            </div>
+            </Field>
 
-            {/* Cantidad de Puertas */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Cantidad de Puertas
-              </label>
-              <input
+            <Field label="Cantidad de puertas" htmlFor="cantidadPuertas">
+              <TextInput
+                id="cantidadPuertas"
                 type="number"
                 value={formData.cantidadPuertas}
-                onChange={(e) =>
-                  handleInputChange("cantidadPuertas", e.target.value)
-                }
+                onChange={(e) => handleInputChange("cantidadPuertas", e.target.value)}
                 placeholder="Ej: 4"
                 min="2"
                 max="5"
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
               />
-            </div>
+            </Field>
 
-            {/* Cantidad de Asientos */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Cantidad de Asientos
-              </label>
-              <input
+            <Field label="Cantidad de asientos" htmlFor="cantidadAsientos">
+              <TextInput
+                id="cantidadAsientos"
                 type="number"
                 value={formData.cantidadAsientos}
-                onChange={(e) =>
-                  handleInputChange("cantidadAsientos", e.target.value)
-                }
+                onChange={(e) => handleInputChange("cantidadAsientos", e.target.value)}
                 placeholder="Ej: 5"
                 min="2"
                 max="9"
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
               />
-            </div>
-          </div>
-        </div>
+            </Field>
+          </FormSection>
 
-        {/* Equipamiento */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold text-gray-800 mb-6">
-            Equipamiento
-          </h2>
-
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-              {[
-                "ABS",
-                "Airbags frontales",
-                "Airbags laterales",
-                "Aire acondicionado",
-                "Alarma",
-                "Bluetooth",
-                "Cámara de retroceso",
-                "Cierre centralizado",
-                "Control de crucero",
-                "Control de estabilidad",
-                "Control de tracción",
-                "Cristales eléctricos",
-                "Dirección asistida",
-                "Espejos eléctricos",
-                "Faros antiniebla",
-                "Llantas de aleación",
-                "Sensor de estacionamiento",
-                "Techo solar",
-              ].map((item) => (
+          <FormSection title="Equipamiento (opcional)" index={3}>
+            <div className="col-span-full grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {EQUIPAMIENTO_OPCIONES.map((item) => (
                 <label
                   key={item}
-                  className="flex items-center gap-2 p-2 hover:bg-gray-50 rounded cursor-pointer"
+                  className="flex items-center gap-3 rounded-lg border border-gray-200 bg-white px-4 py-3 transition-colors duration-150 hover:bg-gray-50"
                 >
                   <input
                     type="checkbox"
@@ -1095,538 +970,222 @@ export default function EditarUsados() {
                       if (e.target.checked) {
                         setEquipamiento([...equipamiento, item]);
                       } else {
-                        setEquipamiento(
-                          equipamiento.filter((eq) => eq !== item)
-                        );
+                        setEquipamiento(equipamiento.filter((eq) => eq !== item));
                       }
                     }}
-                    className="w-4 h-4 text-cyan-600 border-gray-300 rounded focus:ring-cyan-500"
+                    className="size-5 shrink-0 accent-gray-900"
                   />
-                  <span className="text-sm text-gray-700">{item}</span>
+                  <span className="text-[16px] text-gray-900">{item}</span>
                 </label>
               ))}
             </div>
-          </div>
-        </div>
+          </FormSection>
 
-        {/* Multimedia */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold text-gray-800 mb-6 flex items-center gap-2">
-            <ImageIcon className="h-5 w-5 text-cyan-600" />
-            Imágenes y Videos
-          </h2>
-
-          {/* Imágenes Existentes */}
-          {existingImages.length > 0 && (
-            <div className="mb-8">
-              <h3 className="text-sm font-medium text-gray-700 mb-4">
-                Imágenes Actuales
-              </h3>
-              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                {existingImages.map((image) => (
-                  <div
-                    key={image.public_id}
-                    className={`relative group ${
-                      imagesToDelete.includes(image.public_id)
-                        ? "opacity-50"
-                        : ""
-                    }`}
-                  >
-                    <Image
-                      src={image.secure_url}
-                      alt="Imagen existente"
-                      width={300}
-                      height={128}
-                      className="w-full h-32 object-cover rounded-lg border border-gray-200"
-                    />
-                    <button
-                      type="button"
-                      onClick={() =>
-                        markExistingImageForDeletion(image.public_id)
-                      }
-                      className={`absolute top-2 right-2 p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity ${
-                        imagesToDelete.includes(image.public_id)
-                          ? "bg-green-600 text-white"
-                          : "bg-red-600 text-white"
-                      }`}
-                    >
-                      {imagesToDelete.includes(image.public_id) ? (
-                        <RefreshCw className="h-4 w-4" />
-                      ) : (
-                        <X className="h-4 w-4" />
-                      )}
-                    </button>
-                    {imagesToDelete.includes(image.public_id) && (
-                      <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 rounded-lg">
-                        <span className="text-white text-xs font-medium">
-                          Se eliminará
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Nuevas Imágenes */}
-          <div className="mb-8">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h3 className="text-sm font-medium text-gray-700">
-                  Agregar Nuevas Imágenes
-                </h3>
-                <p className="text-xs text-gray-500 mt-1">
-                  Máximo 10 imágenes en total • Formatos: JPG, PNG, WEBP • Máx
-                  5MB c/u
-                </p>
-              </div>
-              <label className="px-4 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 transition-colors cursor-pointer flex items-center gap-2">
-                <Upload className="h-4 w-4" />
-                Subir Imágenes
-                <input
-                  type="file"
-                  multiple
-                  accept="image/*"
-                  onChange={handleNewImageUpload}
-                  className="hidden"
-                />
-              </label>
+          <FormSection title="Imágenes y videos" index={4}>
+            <div className="col-span-full space-y-2">
+              <span className="text-[15.5px] font-semibold text-gray-800">
+                Imágenes del vehículo (
+                {existingImages.filter((img) => !imagesToDelete.includes(img.public_id)).length +
+                  newImageFiles.length}
+                /10)
+              </span>
+              <MediaUploadZone
+                previews={imagePreviews}
+                onFilesSelected={handleImageFilesSelected}
+                onRemove={handleRemoveImagePreview}
+                max={10}
+                acceptedTypes={["image/jpeg", "image/png", "image/webp"]}
+                maxSizeMB={20}
+                instruccion="Arrastrá las fotos acá o hacé clic — JPG, PNG o WEBP, máximo 20 MB cada una"
+              />
+              {errors.imagenes ? (
+                <span className="flex items-start gap-1.5 text-[15px] font-medium text-red-600">
+                  <AlertCircle className="mt-0.5 size-4 shrink-0" strokeWidth={2} aria-hidden />
+                  {errors.imagenes}
+                </span>
+              ) : null}
             </div>
 
-            {errors.imagenes && (
-              <p className="text-red-600 text-sm mb-4">{errors.imagenes}</p>
-            )}
+            <div className="col-span-full space-y-2">
+              <span className="text-[15.5px] font-semibold text-gray-800">
+                Videos del vehículo (
+                {existingVideos.filter((vid) => !videosToDelete.includes(vid.public_id)).length +
+                  newVideoFiles.length}
+                /5)
+              </span>
+              <MediaUploadZone
+                previews={videoPreviews}
+                onFilesSelected={handleVideoFilesSelected}
+                onRemove={handleRemoveVideoPreview}
+                max={5}
+                acceptedTypes={["video/mp4", "video/quicktime", "video/x-msvideo", "video/webm"]}
+                maxSizeMB={50}
+                instruccion="Arrastrá los videos acá o hacé clic — MP4, MOV o AVI, máximo 50 MB cada uno"
+              />
+              {errors.videos ? (
+                <span className="flex items-start gap-1.5 text-[15px] font-medium text-red-600">
+                  <AlertCircle className="mt-0.5 size-4 shrink-0" strokeWidth={2} aria-hidden />
+                  {errors.videos}
+                </span>
+              ) : null}
+            </div>
 
-            {newImageFiles.length > 0 && (
-              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                {newImageFiles.map((file, index) => (
-                  <div key={index} className="relative group">
-                    <Image
-                      src={file.url}
-                      alt={`Nueva imagen ${index + 1}`}
-                      width={300}
-                      height={128}
-                      className="w-full h-32 object-cover rounded-lg border border-green-300"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => removeNewFile(index, "image")}
-                      className="absolute top-2 right-2 p-1 bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                    <div className="absolute bottom-2 left-2 px-2 py-1 bg-green-600 text-white text-xs rounded">
-                      Nueva
+            <div className="col-span-full space-y-3 border-t border-gray-100 pt-6">
+              <span className="text-[15.5px] font-semibold text-gray-800">
+                Fotos sin fondo (para ficha técnica PDF, opcional)
+              </span>
+              <p className="text-[14.5px] text-gray-500">
+                Se usan para generar la ficha técnica en PDF. Deben tener fondo
+                transparente (PNG).
+              </p>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <span className="text-[15.5px] font-semibold text-gray-800">
+                    Foto principal sin fondo
+                  </span>
+                  {fotoSinFondo1Preview ? (
+                    <div className="relative aspect-video overflow-hidden rounded-xl border border-gray-100 bg-gray-50">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={fotoSinFondo1Preview} alt="" className="size-full object-contain" />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setNewFotoSinFondo1(null);
+                          setFotoSinFondo1Preview(null);
+                        }}
+                        className="absolute right-1.5 top-1.5 flex items-center gap-1 rounded-lg border border-gray-200 bg-white/95 px-2.5 py-1 text-[15px] font-semibold text-gray-700 transition-colors duration-150 hover:border-red-100 hover:bg-red-50 hover:text-red-600"
+                      >
+                        Quitar
+                      </button>
                     </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Videos Existentes */}
-          {existingVideos.length > 0 && (
-            <div className="mb-8">
-              <h3 className="text-sm font-medium text-gray-700 mb-4">
-                Videos Actuales
-              </h3>
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                {existingVideos.map((video) => (
-                  <div
-                    key={video.public_id}
-                    className={`relative group ${
-                      videosToDelete.includes(video.public_id)
-                        ? "opacity-50"
-                        : ""
-                    }`}
-                  >
-                    <video
-                      src={video.secure_url}
-                      className="w-full h-32 object-cover rounded-lg border border-gray-200"
-                    />
-                    <button
-                      type="button"
-                      onClick={() =>
-                        markExistingVideoForDeletion(video.public_id)
-                      }
-                      className={`absolute top-2 right-2 p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity ${
-                        videosToDelete.includes(video.public_id)
-                          ? "bg-green-600 text-white"
-                          : "bg-red-600 text-white"
-                      }`}
-                    >
-                      {videosToDelete.includes(video.public_id) ? (
-                        <RefreshCw className="h-4 w-4" />
-                      ) : (
-                        <X className="h-4 w-4" />
-                      )}
-                    </button>
-                    {videosToDelete.includes(video.public_id) && (
-                      <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 rounded-lg">
-                        <span className="text-white text-xs font-medium">
-                          Se eliminará
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Nuevos Videos */}
-          <div>
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h3 className="text-sm font-medium text-gray-700">
-                  Agregar Nuevos Videos
-                </h3>
-                <p className="text-xs text-gray-500 mt-1">
-                  Máximo 5 videos en total • Formatos: MP4, MOV, AVI • Máx 50MB
-                  c/u
-                </p>
-              </div>
-              <label className="px-4 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 transition-colors cursor-pointer flex items-center gap-2">
-                <Upload className="h-4 w-4" />
-                Subir Videos
-                <input
-                  type="file"
-                  multiple
-                  accept="video/*"
-                  onChange={handleNewVideoUpload}
-                  className="hidden"
-                />
-              </label>
-            </div>
-
-            {errors.videos && (
-              <p className="text-red-600 text-sm mb-4">{errors.videos}</p>
-            )}
-
-            {newVideoFiles.length > 0 && (
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                {newVideoFiles.map((file, index) => (
-                  <div key={index} className="relative group">
-                    <video
-                      src={file.url}
-                      className="w-full h-32 object-cover rounded-lg border border-green-300"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => removeNewFile(index, "video")}
-                      className="absolute top-2 right-2 p-1 bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                    <div className="absolute bottom-2 left-2 px-2 py-1 bg-green-600 text-white text-xs rounded">
-                      Nuevo
+                  ) : existingFotoSinFondo1 && !deleteFotoSinFondo1 ? (
+                    <div className="relative aspect-video overflow-hidden rounded-xl border border-gray-100 bg-gray-50">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={existingFotoSinFondo1.secure_url}
+                        alt=""
+                        className="size-full object-contain"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setDeleteFotoSinFondo1(true)}
+                        className="absolute right-1.5 top-1.5 flex items-center gap-1 rounded-lg border border-gray-200 bg-white/95 px-2.5 py-1 text-[15px] font-semibold text-gray-700 transition-colors duration-150 hover:border-red-100 hover:bg-red-50 hover:text-red-600"
+                      >
+                        Quitar
+                      </button>
                     </div>
-                  </div>
-                ))}
+                  ) : (
+                    <label className="flex aspect-video cursor-pointer flex-col items-center justify-center gap-2 overflow-hidden rounded-2xl border-2 border-dashed border-gray-200 bg-gray-50/50 text-center transition-colors duration-150 hover:border-gray-400">
+                      <ImageIcon className="size-6 text-gray-400" strokeWidth={1.75} aria-hidden />
+                      <span className="px-3 text-[15px] text-gray-500">Clic para subir</span>
+                      <input
+                        type="file"
+                        accept="image/png"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) handleSlotSelected("fotoSinFondo1", file);
+                          e.target.value = "";
+                        }}
+                      />
+                    </label>
+                  )}
+                </div>
+
+                <div className="space-y-1.5">
+                  <span className="text-[15.5px] font-semibold text-gray-800">
+                    Foto secundaria sin fondo
+                  </span>
+                  {fotoSinFondo2Preview ? (
+                    <div className="relative aspect-video overflow-hidden rounded-xl border border-gray-100 bg-gray-50">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={fotoSinFondo2Preview} alt="" className="size-full object-contain" />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setNewFotoSinFondo2(null);
+                          setFotoSinFondo2Preview(null);
+                        }}
+                        className="absolute right-1.5 top-1.5 flex items-center gap-1 rounded-lg border border-gray-200 bg-white/95 px-2.5 py-1 text-[15px] font-semibold text-gray-700 transition-colors duration-150 hover:border-red-100 hover:bg-red-50 hover:text-red-600"
+                      >
+                        Quitar
+                      </button>
+                    </div>
+                  ) : existingFotoSinFondo2 && !deleteFotoSinFondo2 ? (
+                    <div className="relative aspect-video overflow-hidden rounded-xl border border-gray-100 bg-gray-50">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={existingFotoSinFondo2.secure_url}
+                        alt=""
+                        className="size-full object-contain"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setDeleteFotoSinFondo2(true)}
+                        className="absolute right-1.5 top-1.5 flex items-center gap-1 rounded-lg border border-gray-200 bg-white/95 px-2.5 py-1 text-[15px] font-semibold text-gray-700 transition-colors duration-150 hover:border-red-100 hover:bg-red-50 hover:text-red-600"
+                      >
+                        Quitar
+                      </button>
+                    </div>
+                  ) : (
+                    <label className="flex aspect-video cursor-pointer flex-col items-center justify-center gap-2 overflow-hidden rounded-2xl border-2 border-dashed border-gray-200 bg-gray-50/50 text-center transition-colors duration-150 hover:border-gray-400">
+                      <ImageIcon className="size-6 text-gray-400" strokeWidth={1.75} aria-hidden />
+                      <span className="px-3 text-[15px] text-gray-500">Clic para subir</span>
+                      <input
+                        type="file"
+                        accept="image/png"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) handleSlotSelected("fotoSinFondo2", file);
+                          e.target.value = "";
+                        }}
+                      />
+                    </label>
+                  )}
+                </div>
               </div>
-            )}
-          </div>
-        </div>
-
-        {/* Fotos sin Fondo (para PDF) */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <div className="flex items-center gap-2 mb-6">
-            <Settings className="h-5 w-5 text-cyan-600" />
-            <h2 className="text-lg font-semibold text-gray-800">
-              Fotos sin Fondo para PDF
-            </h2>
-          </div>
-          <p className="text-sm text-gray-600 mb-6">
-            Estas imágenes se usarán para generar la ficha técnica en PDF. Deben
-            tener fondo transparente (PNG).
-          </p>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Foto sin Fondo 1 */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-3">
-                Foto Principal sin Fondo
-              </label>
-
-              {/* Imagen existente */}
-              {existingFotoSinFondo1 && !deleteFotoSinFondo1 && (
-                <div className="relative group mb-4">
-                  <Image
-                    src={existingFotoSinFondo1.secure_url}
-                    alt="Foto sin fondo 1"
-                    width={400}
-                    height={300}
-                    className="w-full h-48 object-contain rounded-lg border border-gray-200 bg-gray-50"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setDeleteFotoSinFondo1(true)}
-                    className="absolute top-2 right-2 p-2 bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                  <div className="absolute bottom-2 left-2 px-2 py-1 bg-blue-600 text-white text-xs rounded">
-                    Actual
-                  </div>
-                </div>
-              )}
-
-              {/* Mensaje de eliminación */}
-              {existingFotoSinFondo1 && deleteFotoSinFondo1 && (
-                <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-red-700">
-                      Se eliminará la foto actual
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => setDeleteFotoSinFondo1(false)}
-                      className="text-red-600 hover:text-red-800"
-                    >
-                      <RefreshCw className="h-4 w-4" />
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* Nueva imagen */}
-              {newFotoSinFondo1 && (
-                <div className="relative group mb-4">
-                  <Image
-                    src={URL.createObjectURL(newFotoSinFondo1)}
-                    alt="Nueva foto sin fondo 1"
-                    width={400}
-                    height={300}
-                    className="w-full h-48 object-contain rounded-lg border border-green-300 bg-gray-50"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setNewFotoSinFondo1(null)}
-                    className="absolute top-2 right-2 p-2 bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                  <div className="absolute bottom-2 left-2 px-2 py-1 bg-green-600 text-white text-xs rounded">
-                    Nueva
-                  </div>
-                </div>
-              )}
-
-              {/* Botón de carga */}
-              {!newFotoSinFondo1 && (
-                <label className="flex flex-col items-center justify-center w-full h-48 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100 transition-colors">
-                  <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                    <ImageIcon className="h-10 w-10 text-gray-400 mb-3" />
-                    <p className="text-sm text-gray-600 mb-1">
-                      <span className="font-semibold">Click para subir</span>
-                    </p>
-                    <p className="text-xs text-gray-500">
-                      PNG con transparencia
-                    </p>
-                  </div>
-                  <input
-                    type="file"
-                    accept="image/png"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) setNewFotoSinFondo1(file);
-                    }}
-                    className="hidden"
-                  />
-                </label>
-              )}
             </div>
+          </FormSection>
 
-            {/* Foto sin Fondo 2 */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-3">
-                Foto Secundaria sin Fondo
-              </label>
+          <FormSection title="Descripción" index={5}>
+            <Field label="Descripción" htmlFor="descripcion" className="md:col-span-2">
+              <TextareaField
+                id="descripcion"
+                value={formData.descripcion}
+                onChange={(e) => handleInputChange("descripcion", e.target.value)}
+                placeholder="Describí las características y condiciones del vehículo usado..."
+                rows={6}
+              />
+            </Field>
+          </FormSection>
 
-              {/* Imagen existente */}
-              {existingFotoSinFondo2 && !deleteFotoSinFondo2 && (
-                <div className="relative group mb-4">
-                  <Image
-                    src={existingFotoSinFondo2.secure_url}
-                    alt="Foto sin fondo 2"
-                    width={400}
-                    height={300}
-                    className="w-full h-48 object-contain rounded-lg border border-gray-200 bg-gray-50"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setDeleteFotoSinFondo2(true)}
-                    className="absolute top-2 right-2 p-2 bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                  <div className="absolute bottom-2 left-2 px-2 py-1 bg-blue-600 text-white text-xs rounded">
-                    Actual
-                  </div>
-                </div>
-              )}
-
-              {/* Mensaje de eliminación */}
-              {existingFotoSinFondo2 && deleteFotoSinFondo2 && (
-                <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-red-700">
-                      Se eliminará la foto actual
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => setDeleteFotoSinFondo2(false)}
-                      className="text-red-600 hover:text-red-800"
-                    >
-                      <RefreshCw className="h-4 w-4" />
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* Nueva imagen */}
-              {newFotoSinFondo2 && (
-                <div className="relative group mb-4">
-                  <Image
-                    src={URL.createObjectURL(newFotoSinFondo2)}
-                    alt="Nueva foto sin fondo 2"
-                    width={400}
-                    height={300}
-                    className="w-full h-48 object-contain rounded-lg border border-green-300 bg-gray-50"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setNewFotoSinFondo2(null)}
-                    className="absolute top-2 right-2 p-2 bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                  <div className="absolute bottom-2 left-2 px-2 py-1 bg-green-600 text-white text-xs rounded">
-                    Nueva
-                  </div>
-                </div>
-              )}
-
-              {/* Botón de carga */}
-              {!newFotoSinFondo2 && (
-                <label className="flex flex-col items-center justify-center w-full h-48 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100 transition-colors">
-                  <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                    <ImageIcon className="h-10 w-10 text-gray-400 mb-3" />
-                    <p className="text-sm text-gray-600 mb-1">
-                      <span className="font-semibold">Click para subir</span>
-                    </p>
-                    <p className="text-xs text-gray-500">
-                      PNG con transparencia
-                    </p>
-                  </div>
-                  <input
-                    type="file"
-                    accept="image/png"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) setNewFotoSinFondo2(file);
-                    }}
-                    className="hidden"
-                  />
-                </label>
-              )}
-            </div>
+          <div className="col-span-full flex justify-end gap-3 border-t border-gray-100 pt-6">
+            <AdminButton variant="secondary" href="/admin/usados">
+              Cancelar
+            </AdminButton>
+            <AdminButton
+              type="submit"
+              variant="primary"
+              icon={saving ? Loader2 : Save}
+              disabled={saving}
+              className={saving ? "[&_svg]:animate-spin" : undefined}
+            >
+              {saving ? "Guardando cambios..." : "Guardar cambios"}
+            </AdminButton>
           </div>
-        </div>
-
-        {/* Descripción */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold text-gray-800 mb-6">
-            Descripción
-          </h2>
-
-          <textarea
-            value={formData.descripcion}
-            onChange={(e) => handleInputChange("descripcion", e.target.value)}
-            placeholder="Describa las características y condiciones del vehículo usado..."
-            rows={6}
-            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
-          />
-        </div>
-
-        {/* Botones de acción */}
-        <div className="flex items-center justify-end gap-4">
-          <Link
-            href="/admin/usados"
-            className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-          >
-            Cancelar
-          </Link>
-          <button
-            type="submit"
-            disabled={saving}
-            className="px-6 py-3 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-          >
-            {saving ? (
-              <>
-                <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent" />
-                Guardando...
-              </>
-            ) : (
-              <>
-                <Save className="h-5 w-5" />
-                Guardar Cambios
-              </>
-            )}
-          </button>
-        </div>
+        </FormShell>
       </form>
 
-      {/* Modal de confirmación de eliminación */}
-      {showDeleteConfirm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
-            <div className="flex items-start gap-4">
-              <div className="flex-shrink-0 w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
-                <AlertCircle className="h-6 w-6 text-red-600" />
-              </div>
-              <div className="flex-1">
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                  ¿Eliminar vehículo usado?
-                </h3>
-                <p className="text-gray-600 text-sm mb-4">
-                  Esta acción no se puede deshacer. El vehículo usado y todos
-                  sus archivos multimedia serán eliminados permanentemente.
-                </p>
-                <div className="flex gap-3">
-                  <button
-                    type="button"
-                    onClick={handleDelete}
-                    disabled={saving}
-                    className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                  >
-                    {saving ? (
-                      <>
-                        <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
-                        Eliminando...
-                      </>
-                    ) : (
-                      <>
-                        <Trash2 className="h-4 w-4" />
-                        Eliminar
-                      </>
-                    )}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setShowDeleteConfirm(false)}
-                    disabled={saving}
-                    className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
-                  >
-                    Cancelar
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmDialog
+        open={showDeleteConfirm}
+        onClose={() => setShowDeleteConfirm(false)}
+        onConfirm={handleDelete}
+        title="Eliminar vehículo usado"
+        message="¿Eliminar este vehículo usado? Esta acción no se puede deshacer. El vehículo y todos sus archivos multimedia se eliminarán permanentemente."
+        confirmLabel="Eliminar"
+        danger
+      />
     </div>
   );
 }

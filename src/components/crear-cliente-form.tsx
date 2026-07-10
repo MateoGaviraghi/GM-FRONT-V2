@@ -4,12 +4,22 @@ import React from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  AdminButton,
+  DraftBanner,
+  Field,
+  FormSection,
+  FormShell,
+  MaskedInput,
+  TextInput,
+  TextareaField,
+  mapApiError,
+  useFormDraft,
+  useToast,
+  useUnsavedGuard,
+} from "@/components/admin/kit";
 import { ClienteService, CreateClienteRequest } from "@/services";
-import { User, Car, CheckCircle } from "lucide-react";
+import { User, CheckCircle, AlertCircle } from "lucide-react";
 import { AutocompleteInput } from "@/components/autocomplete-input";
 import {
   PROVINCIAS_ARGENTINA,
@@ -44,10 +54,14 @@ const schema = z.object({
 
 type FormData = z.infer<typeof schema>;
 
+const AUTOCOMPLETE_CLASS =
+  "h-11 w-full rounded-lg border border-gray-200 bg-white px-3.5 text-[16px] text-gray-900 placeholder:text-gray-400 transition-[border-color,box-shadow] duration-150 focus:border-gray-900 focus:ring-4 focus:ring-gray-900/5 focus:outline-none focus-visible:outline-none disabled:cursor-not-allowed disabled:bg-gray-50 disabled:opacity-60";
+
 export function CrearClienteForm() {
   const [success, setSuccess] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [isLoading, setIsLoading] = React.useState(false);
+  const { showToast } = useToast();
 
   const {
     register,
@@ -55,18 +69,29 @@ export function CrearClienteForm() {
     reset,
     control,
     setValue,
-    formState: { errors, isSubmitting },
+    formState: { errors, isSubmitting, isDirty },
   } = useForm<FormData>({
     resolver: zodResolver(schema),
   });
 
-  // Watch para autocompletado
-  const provinciaValue = useWatch({ control, name: "provincia" }) || "";
-  const localidadValue = useWatch({ control, name: "localidad" }) || "";
-  const tipoVehiculoValue = useWatch({ control, name: "tipoVehiculo" }) || "";
-  const marcaValue = useWatch({ control, name: "marca" }) || "";
-  const modeloValue = useWatch({ control, name: "modelo" }) || "";
-  const tipoClienteValue = useWatch({ control, name: "tipoCliente" }) || "";
+  // Un ÚNICO useWatch global; los valores puntuales se derivan de él (4R2.f-5)
+  const allValues = useWatch({ control });
+  const provinciaValue = allValues.provincia || "";
+  const localidadValue = allValues.localidad || "";
+  const tipoVehiculoValue = allValues.tipoVehiculo || "";
+  const marcaValue = allValues.marca || "";
+  const modeloValue = allValues.modelo || "";
+  const tipoClienteValue = allValues.tipoCliente || "";
+  const telefonoCelularValue = allValues.telefonoCelular || "";
+  const telefonoFijoValue = allValues.telefonoFijo || "";
+
+  const { hasDraft, restoreDraft, dismissDraft } = useFormDraft<FormData>(
+    "cliente-crear",
+    allValues as FormData,
+    (draft) => reset(draft)
+  );
+  useUnsavedGuard(isDirty);
+
   const onSubmit = async (data: FormData) => {
     setSuccess(null);
     setError(null);
@@ -139,6 +164,7 @@ export function CrearClienteForm() {
 
       await ClienteService.create(clienteData);
       setSuccess("Cliente creado exitosamente.");
+      showToast({ variant: "success", message: "El cliente se guardó correctamente." });
 
       // Limpiar formulario después de un momento
       setTimeout(() => {
@@ -147,11 +173,9 @@ export function CrearClienteForm() {
       }, 3000);
     } catch (err) {
       console.error("Error al crear cliente:", err);
-      if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError("Error al crear cliente");
-      }
+      const message = err instanceof Error ? err.message : "Error al crear cliente";
+      setError(message);
+      showToast({ variant: "danger", message: mapApiError(err) });
     } finally {
       setIsLoading(false);
     }
@@ -160,334 +184,196 @@ export function CrearClienteForm() {
   // Mostrar mensaje de éxito
   if (success) {
     return (
-      <Card className="border-green-200">
-        <CardContent className="pt-6">
-          <div className="text-center">
-            <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
-            <h3 className="text-lg font-bold text-slate-800 mb-2">
-              ¡Cliente creado exitosamente!
-            </h3>
-            <p className="text-slate-600">
-              El cliente ha sido registrado en el sistema.
-            </p>
-          </div>
-        </CardContent>
-      </Card>
+      <div className="rounded-2xl border border-gray-100 bg-white p-8 text-center shadow-sm">
+        <span className="mx-auto mb-4 flex size-14 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
+          <CheckCircle className="size-7" strokeWidth={1.75} aria-hidden />
+        </span>
+        <h3 className="mb-2 text-[20px] font-semibold text-gray-900">¡Cliente creado exitosamente!</h3>
+        <p className="text-[16px] text-gray-500">El cliente ha sido registrado en el sistema.</p>
+      </div>
     );
   }
 
   return (
-    <div className="space-y-4 md:space-y-6 px-4 md:px-0">
-      {/* Datos Personales */}
-      <Card>
-        <CardHeader className="px-4 md:px-6">
-          <CardTitle className="flex items-center gap-2 text-lg md:text-xl">
-            <User className="w-4 h-4 md:w-5 md:h-5 text-cyan-600" />
-            Datos Personales
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="px-4 md:px-6">
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-            {/* Error general */}
-            {error && (
-              <div className="bg-red-50 border border-red-200 rounded-md p-3">
-                <span className="text-red-700 text-sm">{error}</span>
-              </div>
-            )}
+    <div className="space-y-6">
+      {hasDraft ? <DraftBanner onRestore={restoreDraft} onDismiss={dismissDraft} /> : null}
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
-              <div className="space-y-2">
-                <Label
-                  htmlFor="nombreCompleto"
-                  className="text-slate-700 font-medium"
-                >
-                  Nombre Completo
-                </Label>
-                <Input
-                  id="nombreCompleto"
-                  {...register("nombreCompleto")}
-                  placeholder="Nombre completo del cliente"
-                  className={`border-slate-300 focus:border-cyan-400 focus:ring-cyan-400 ${
-                    errors.nombreCompleto
-                      ? "border-red-500 focus:border-red-500 focus:ring-red-500"
-                      : ""
-                  }`}
-                />
-                {errors.nombreCompleto && (
-                  <p className="text-red-500 text-xs mt-1">
-                    {errors.nombreCompleto.message}
-                  </p>
-                )}
-              </div>
+      <FormShell eyebrow="Clientes" title="Crear cliente" description="Completá los datos del cliente. Los campos vacíos se pueden dejar en blanco.">
+        {error && (
+          <div className="col-span-full flex items-start gap-2 rounded-xl border border-red-100 bg-red-50 p-3">
+            <AlertCircle className="mt-0.5 size-5 shrink-0 text-red-600" strokeWidth={2} aria-hidden />
+            <span className="text-[16px] font-medium text-red-600">{error}</span>
+          </div>
+        )}
 
-              <div className="space-y-2">
-                <Label
-                  htmlFor="fechaNacimiento"
-                  className="text-slate-700 font-medium"
-                >
-                  Fecha de Nacimiento
-                </Label>
-                <Input
-                  id="fechaNacimiento"
-                  {...register("fechaNacimiento")}
-                  type="date"
-                  className="border-slate-300 focus:border-cyan-400 focus:ring-cyan-400"
-                />
-              </div>
-            </div>
+        <form onSubmit={handleSubmit(onSubmit)} className="contents">
+          <FormSection title="Datos personales" index={1}>
+            <Field label="Nombre completo" htmlFor="nombreCompleto" error={errors.nombreCompleto?.message}>
+              <TextInput
+                id="nombreCompleto"
+                {...register("nombreCompleto")}
+                placeholder="Nombre completo del cliente"
+                invalid={!!errors.nombreCompleto}
+              />
+            </Field>
 
-            <div className="space-y-2">
-              <Label
-                htmlFor="correoElectronico"
-                className="text-slate-700 font-medium"
-              >
-                Correo Electrónico
-              </Label>
-              <Input
+            <Field label="Fecha de nacimiento" htmlFor="fechaNacimiento">
+              <TextInput id="fechaNacimiento" {...register("fechaNacimiento")} type="date" />
+            </Field>
+
+            <Field label="Correo electrónico" htmlFor="correoElectronico" error={errors.correoElectronico?.message}>
+              <TextInput
                 id="correoElectronico"
                 {...register("correoElectronico")}
                 type="email"
                 placeholder="cliente@email.com"
-                className={`border-slate-300 focus:border-cyan-400 focus:ring-cyan-400 ${
-                  errors.correoElectronico
-                    ? "border-red-500 focus:border-red-500 focus:ring-red-500"
-                    : ""
-                }`}
+                invalid={!!errors.correoElectronico}
               />
-              {errors.correoElectronico && (
-                <p className="text-red-500 text-xs mt-1">
-                  {errors.correoElectronico.message}
-                </p>
-              )}
-            </div>
+            </Field>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label
-                  htmlFor="telefonoCelular"
-                  className="text-slate-700 font-medium"
-                >
-                  Teléfono Celular
-                </Label>
-                <Input
-                  id="telefonoCelular"
-                  {...register("telefonoCelular")}
-                  placeholder="Número de celular"
-                  className="border-slate-300 focus:border-cyan-400 focus:ring-cyan-400"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label
-                  htmlFor="telefonoFijo"
-                  className="text-slate-700 font-medium"
-                >
-                  Teléfono Fijo
-                </Label>
-                <Input
-                  id="telefonoFijo"
-                  {...register("telefonoFijo")}
-                  placeholder="Número fijo"
-                  className="border-slate-300 focus:border-cyan-400 focus:ring-cyan-400"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label
-                  htmlFor="provincia"
-                  className="text-slate-700 font-medium"
-                >
-                  Provincia
-                </Label>
-                <AutocompleteInput
-                  id="provincia"
-                  name="provincia"
-                  value={provinciaValue}
-                  onChange={(value) => setValue("provincia", value)}
-                  options={PROVINCIAS_ARGENTINA}
-                  placeholder="Escribir o seleccionar provincia..."
-                  className="border-slate-300 focus:border-cyan-400 focus:ring-cyan-400"
-                  allowCustom={true}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label
-                  htmlFor="localidad"
-                  className="text-slate-700 font-medium"
-                >
-                  Localidad
-                </Label>
-                <AutocompleteInput
-                  id="localidad"
-                  name="localidad"
-                  value={localidadValue}
-                  onChange={(value) => setValue("localidad", value)}
-                  options={LOCALIDADES_PRINCIPALES}
-                  placeholder="Escribir o seleccionar localidad..."
-                  className="border-slate-300 focus:border-cyan-400 focus:ring-cyan-400"
-                  allowCustom={true}
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="direccion" className="text-slate-700 font-medium">
-                Dirección
-              </Label>
-              <Input
-                id="direccion"
-                {...register("direccion")}
-                placeholder="Dirección completa"
-                className="border-slate-300 focus:border-cyan-400 focus:ring-cyan-400"
+            <Field label="Teléfono celular" htmlFor="telefonoCelular">
+              <MaskedInput
+                id="telefonoCelular"
+                mask="telefono"
+                value={telefonoCelularValue}
+                onChange={(v) => setValue("telefonoCelular", v, { shouldDirty: true })}
               />
-            </div>
-          </form>
-        </CardContent>
-      </Card>
+            </Field>
 
-      {/* Datos del Vehículo */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Car className="w-5 h-5 text-green-600" />
-            Datos del Vehículo
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label
-                  htmlFor="tipoVehiculo"
-                  className="text-slate-700 font-medium"
-                >
-                  Tipo de Vehículo
-                </Label>
-                <AutocompleteInput
-                  id="tipoVehiculo"
-                  name="tipoVehiculo"
-                  value={tipoVehiculoValue}
-                  onChange={(value) => setValue("tipoVehiculo", value)}
-                  options={TIPOS_VEHICULO}
-                  placeholder="Escribir o seleccionar tipo de vehículo..."
-                  className="border-slate-300 focus:border-cyan-400 focus:ring-cyan-400"
-                  allowCustom={true}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label
-                  htmlFor="anioCompra"
-                  className="text-slate-700 font-medium"
-                >
-                  Año de Compra
-                </Label>
-                <Input
-                  id="anioCompra"
-                  {...register("anioCompra")}
-                  type="number"
-                  min="1900"
-                  max="2100"
-                  placeholder="2023"
-                  className="border-slate-300 focus:border-cyan-400 focus:ring-cyan-400"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="marca" className="text-slate-700 font-medium">
-                  Marca
-                </Label>
-                <AutocompleteInput
-                  id="marca"
-                  name="marca"
-                  value={marcaValue}
-                  onChange={(value) => {
-                    setValue("marca", value);
-                    // Limpiar modelo cuando cambia la marca
-                    setValue("modelo", "");
-                  }}
-                  options={MARCAS_VEHICULOS}
-                  placeholder="Escribir o seleccionar marca..."
-                  className="border-slate-300 focus:border-cyan-400 focus:ring-cyan-400"
-                  allowCustom={true}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="modelo" className="text-slate-700 font-medium">
-                  Modelo
-                </Label>
-                <AutocompleteInput
-                  id="modelo"
-                  name="modelo"
-                  value={modeloValue}
-                  onChange={(value) => setValue("modelo", value)}
-                  options={getModelosPorMarca(marcaValue)}
-                  placeholder="Escribir o seleccionar modelo..."
-                  className="border-slate-300 focus:border-cyan-400 focus:ring-cyan-400"
-                  allowCustom={true}
-                  noOptionsText={
-                    marcaValue
-                      ? "No hay modelos disponibles para esta marca"
-                      : "Primero selecciona una marca"
-                  }
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label
-                  htmlFor="tipoCliente"
-                  className="text-slate-700 font-medium"
-                >
-                  Tipo de Cliente
-                </Label>
-                <AutocompleteInput
-                  id="tipoCliente"
-                  name="tipoCliente"
-                  value={tipoClienteValue}
-                  onChange={(value) => setValue("tipoCliente", value)}
-                  options={TIPOS_CLIENTE}
-                  placeholder="Escribir o seleccionar tipo de cliente..."
-                  className="border-slate-300 focus:border-cyan-400 focus:ring-cyan-400"
-                  allowCustom={true}
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label
-                htmlFor="observaciones"
-                className="text-slate-700 font-medium"
-              >
-                Observaciones
-              </Label>
-              <textarea
-                id="observaciones"
-                {...register("observaciones")}
-                placeholder="Notas adicionales sobre el cliente..."
-                className="w-full px-3 py-2 border border-slate-300 rounded-md focus:border-cyan-400 focus:ring-cyan-400 min-h-[80px] resize-y"
-                rows={3}
+            <Field label="Teléfono fijo" htmlFor="telefonoFijo">
+              <MaskedInput
+                id="telefonoFijo"
+                mask="telefono"
+                value={telefonoFijoValue}
+                onChange={(v) => setValue("telefonoFijo", v, { shouldDirty: true })}
               />
-            </div>
+            </Field>
 
-            <Button
-              onClick={handleSubmit(onSubmit)}
-              className="w-full bg-cyan-500 hover:bg-cyan-600 text-white font-medium py-3 mt-6"
+            <Field label="Provincia" htmlFor="provincia">
+              <AutocompleteInput
+                id="provincia"
+                name="provincia"
+                value={provinciaValue}
+                onChange={(value) => setValue("provincia", value, { shouldDirty: true })}
+                options={PROVINCIAS_ARGENTINA}
+                placeholder="Escribir o seleccionar provincia..."
+                className={AUTOCOMPLETE_CLASS}
+                allowCustom={true}
+              />
+            </Field>
+
+            <Field label="Localidad" htmlFor="localidad">
+              <AutocompleteInput
+                id="localidad"
+                name="localidad"
+                value={localidadValue}
+                onChange={(value) => setValue("localidad", value, { shouldDirty: true })}
+                options={LOCALIDADES_PRINCIPALES}
+                placeholder="Escribir o seleccionar localidad..."
+                className={AUTOCOMPLETE_CLASS}
+                allowCustom={true}
+              />
+            </Field>
+
+            <Field label="Dirección" htmlFor="direccion" className="md:col-span-2">
+              <TextInput id="direccion" {...register("direccion")} placeholder="Dirección completa" />
+            </Field>
+          </FormSection>
+        </form>
+
+        <FormSection title="Datos del vehículo" index={2}>
+          <Field label="Tipo de vehículo" htmlFor="tipoVehiculo">
+            <AutocompleteInput
+              id="tipoVehiculo"
+              name="tipoVehiculo"
+              value={tipoVehiculoValue}
+              onChange={(value) => setValue("tipoVehiculo", value, { shouldDirty: true })}
+              options={TIPOS_VEHICULO}
+              placeholder="Escribir o seleccionar tipo de vehículo..."
+              className={AUTOCOMPLETE_CLASS}
+              allowCustom={true}
+            />
+          </Field>
+
+          <Field label="Año de compra" htmlFor="anioCompra">
+            <TextInput
+              id="anioCompra"
+              {...register("anioCompra")}
+              type="number"
+              min="1900"
+              max="2100"
+              placeholder="2023"
+            />
+          </Field>
+
+          <Field label="Marca" htmlFor="marca">
+            <AutocompleteInput
+              id="marca"
+              name="marca"
+              value={marcaValue}
+              onChange={(value) => {
+                setValue("marca", value, { shouldDirty: true });
+                // Limpiar modelo cuando cambia la marca
+                setValue("modelo", "", { shouldDirty: true });
+              }}
+              options={MARCAS_VEHICULOS}
+              placeholder="Escribir o seleccionar marca..."
+              className={AUTOCOMPLETE_CLASS}
+              allowCustom={true}
+            />
+          </Field>
+
+          <Field label="Modelo" htmlFor="modelo">
+            <AutocompleteInput
+              id="modelo"
+              name="modelo"
+              value={modeloValue}
+              onChange={(value) => setValue("modelo", value, { shouldDirty: true })}
+              options={getModelosPorMarca(marcaValue)}
+              placeholder="Escribir o seleccionar modelo..."
+              className={AUTOCOMPLETE_CLASS}
+              allowCustom={true}
+              noOptionsText={
+                marcaValue ? "No hay modelos disponibles para esta marca" : "Primero selecciona una marca"
+              }
+            />
+          </Field>
+
+          <Field label="Tipo de cliente" htmlFor="tipoCliente">
+            <AutocompleteInput
+              id="tipoCliente"
+              name="tipoCliente"
+              value={tipoClienteValue}
+              onChange={(value) => setValue("tipoCliente", value, { shouldDirty: true })}
+              options={TIPOS_CLIENTE}
+              placeholder="Escribir o seleccionar tipo de cliente..."
+              className={AUTOCOMPLETE_CLASS}
+              allowCustom={true}
+            />
+          </Field>
+
+          <Field label="Observaciones" htmlFor="observaciones" className="md:col-span-2">
+            <TextareaField
+              id="observaciones"
+              {...register("observaciones")}
+              placeholder="Notas adicionales sobre el cliente..."
+              rows={3}
+            />
+          </Field>
+
+          <div className="col-span-full">
+            <AdminButton
+              variant="primary"
+              icon={User}
+              className="w-full"
               disabled={isLoading || isSubmitting}
+              onClick={handleSubmit(onSubmit)}
             >
-              <User className="w-4 h-4 mr-2" />
-              {isLoading ? "Creando cliente..." : "Crear Cliente"}
-            </Button>
+              {isLoading ? "Creando cliente…" : "Crear cliente"}
+            </AdminButton>
           </div>
-        </CardContent>
-      </Card>
+        </FormSection>
+      </FormShell>
     </div>
   );
 }

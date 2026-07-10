@@ -1,13 +1,55 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { BarChart3, Users, MapPin, Car, Building } from "lucide-react";
+import { Skeleton } from "@/components/admin/kit";
+import { BarChart3, Users, MapPin, Car, Building, AlertCircle } from "lucide-react";
 import { ClienteService } from "@/services";
 
 interface StatsData {
   group: Record<string, string | number | null>;
   count: number;
+}
+
+function RankingList({
+  title,
+  icon: Icon,
+  items,
+  fieldKey,
+}: {
+  title: string;
+  icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
+  items: StatsData[];
+  fieldKey: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+      <div className="mb-4 flex items-center gap-2 text-[16.5px] font-semibold text-gray-900">
+        <Icon className="size-5 text-gray-400" strokeWidth={1.75} />
+        {title}
+      </div>
+      <div className="space-y-3">
+        {items.length > 0 ? (
+          items.map((item, index) => (
+            <div key={index} className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-gray-100 text-[13px] font-semibold text-gray-600">
+                  {index + 1}
+                </span>
+                <span className="text-[16px] font-medium text-gray-900">
+                  {item.group[fieldKey] || "Sin especificar"}
+                </span>
+              </div>
+              <span className="inline-flex items-center rounded-full bg-gray-100 px-3 py-1 text-[13px] font-medium text-gray-600">
+                {item.count}
+              </span>
+            </div>
+          ))
+        ) : (
+          <p className="py-4 text-center text-[16px] text-gray-500">No hay datos disponibles</p>
+        )}
+      </div>
+    </div>
+  );
 }
 
 export function EstadisticasClientes() {
@@ -52,244 +94,112 @@ export function EstadisticasClientes() {
 
   if (loading) {
     return (
-      <Card>
-        <CardContent className="flex items-center justify-center py-12">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-cyan-500 mx-auto mb-4"></div>
-            <p className="text-slate-600">Cargando estadísticas...</p>
-          </div>
-        </CardContent>
-      </Card>
+      <div className="space-y-6">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-28 rounded-2xl" />
+          ))}
+        </div>
+        <p className="text-center text-[16px] text-gray-500">Cargando estadísticas…</p>
+      </div>
     );
   }
 
   if (error) {
     return (
-      <Card className="border-red-200">
-        <CardContent className="py-8">
-          <div className="text-center">
-            <p className="text-red-600 text-sm">{error}</p>
-          </div>
-        </CardContent>
-      </Card>
+      <div className="flex items-start gap-2 rounded-xl border border-red-100 bg-red-50 p-4">
+        <AlertCircle className="mt-0.5 size-5 shrink-0 text-red-600" strokeWidth={2} aria-hidden />
+        <p className="text-[16px] font-medium text-red-600">{error}</p>
+      </div>
     );
   }
 
   return (
     <div className="space-y-6">
       {/* Estadísticas principales */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        {/* Total Clientes */}
-        <Card className="bg-gradient-to-r from-cyan-500 to-blue-500 text-white">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-cyan-100 text-sm font-medium">
-                  Total Clientes
-                </p>
-                <p className="text-3xl font-bold">
-                  {totalClientes.toLocaleString()}
-                </p>
-              </div>
-              <Users className="w-8 h-8 text-cyan-200" />
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+        <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-[14px] text-gray-500">Total clientes</p>
+              <p className="mt-1 text-[28px] font-semibold tracking-tight text-gray-900">
+                {totalClientes.toLocaleString()}
+              </p>
             </div>
-          </CardContent>
-        </Card>
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
+              <Users className="size-5" strokeWidth={1.75} aria-hidden />
+            </span>
+          </div>
+        </div>
 
-        {/* Top Provincia */}
-        <Card className="bg-gradient-to-r from-green-500 to-emerald-500 text-white">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-green-100 text-sm font-medium">
-                  Top Provincia
-                </p>
-                <p className="text-xl font-bold">
-                  {provincias[0]?.group.provincia || "Sin datos"}
-                </p>
-                <p className="text-green-200 text-sm">
-                  {provincias[0]?.count || 0} clientes
-                </p>
-              </div>
-              <MapPin className="w-8 h-8 text-green-200" />
+        <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-[14px] text-gray-500">Top provincia</p>
+              <p className="mt-1 text-[20px] font-semibold tracking-tight text-gray-900">
+                {provincias[0]?.group.provincia || "Sin datos"}
+              </p>
+              <p className="text-[15px] text-gray-500">{provincias[0]?.count || 0} clientes</p>
             </div>
-          </CardContent>
-        </Card>
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600">
+              <MapPin className="size-5" strokeWidth={1.75} aria-hidden />
+            </span>
+          </div>
+        </div>
 
-        {/* Top Vehículo */}
-        <Card className="bg-gradient-to-r from-purple-500 to-pink-500 text-white">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-purple-100 text-sm font-medium">
-                  Top Vehículo
-                </p>
-                <p className="text-xl font-bold">
-                  {tiposVehiculo[0]?.group.tipoVehiculo || "Sin datos"}
-                </p>
-                <p className="text-purple-200 text-sm">
-                  {tiposVehiculo[0]?.count || 0} clientes
-                </p>
-              </div>
-              <Car className="w-8 h-8 text-purple-200" />
+        <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-[14px] text-gray-500">Top vehículo</p>
+              <p className="mt-1 text-[20px] font-semibold tracking-tight text-gray-900">
+                {tiposVehiculo[0]?.group.tipoVehiculo || "Sin datos"}
+              </p>
+              <p className="text-[15px] text-gray-500">{tiposVehiculo[0]?.count || 0} clientes</p>
             </div>
-          </CardContent>
-        </Card>
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-600">
+              <Car className="size-5" strokeWidth={1.75} aria-hidden />
+            </span>
+          </div>
+        </div>
 
-        {/* Top Marca */}
-        <Card className="bg-gradient-to-r from-orange-500 to-red-500 text-white">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-orange-100 text-sm font-medium">Top Marca</p>
-                <p className="text-xl font-bold">
-                  {marcas[0]?.group.marca || "Sin datos"}
-                </p>
-                <p className="text-orange-200 text-sm">
-                  {marcas[0]?.count || 0} clientes
-                </p>
-              </div>
-              <Building className="w-8 h-8 text-orange-200" />
+        <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-[14px] text-gray-500">Top marca</p>
+              <p className="mt-1 text-[20px] font-semibold tracking-tight text-gray-900">
+                {marcas[0]?.group.marca || "Sin datos"}
+              </p>
+              <p className="text-[15px] text-gray-500">{marcas[0]?.count || 0} clientes</p>
             </div>
-          </CardContent>
-        </Card>
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-violet-50 text-violet-600">
+              <Building className="size-5" strokeWidth={1.75} aria-hidden />
+            </span>
+          </div>
+        </div>
       </div>
 
       {/* Rankings detallados */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Top Provincias */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-green-700">
-              <MapPin className="w-5 h-5" />
-              Top Provincias
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {provincias.length > 0 ? (
-                provincias.map((item, index) => (
-                  <div
-                    key={index}
-                    className="flex items-center justify-between"
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className="flex items-center justify-center w-6 h-6 rounded-full bg-green-100 text-green-700 text-xs font-medium">
-                        {index + 1}
-                      </span>
-                      <span className="font-medium text-slate-700">
-                        {item.group.provincia || "Sin especificar"}
-                      </span>
-                    </div>
-                    <span className="px-2 py-1 bg-green-100 text-green-700 rounded-full text-sm font-medium">
-                      {item.count}
-                    </span>
-                  </div>
-                ))
-              ) : (
-                <p className="text-slate-500 text-center py-4">
-                  No hay datos disponibles
-                </p>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Top Tipos de Vehículo */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-purple-700">
-              <Car className="w-5 h-5" />
-              Tipos de Vehículo
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {tiposVehiculo.length > 0 ? (
-                tiposVehiculo.map((item, index) => (
-                  <div
-                    key={index}
-                    className="flex items-center justify-between"
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className="flex items-center justify-center w-6 h-6 rounded-full bg-purple-100 text-purple-700 text-xs font-medium">
-                        {index + 1}
-                      </span>
-                      <span className="font-medium text-slate-700">
-                        {item.group.tipoVehiculo || "Sin especificar"}
-                      </span>
-                    </div>
-                    <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded-full text-sm font-medium">
-                      {item.count}
-                    </span>
-                  </div>
-                ))
-              ) : (
-                <p className="text-slate-500 text-center py-4">
-                  No hay datos disponibles
-                </p>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Top Marcas */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-orange-700">
-              <Building className="w-5 h-5" />
-              Top Marcas
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {marcas.length > 0 ? (
-                marcas.map((item, index) => (
-                  <div
-                    key={index}
-                    className="flex items-center justify-between"
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className="flex items-center justify-center w-6 h-6 rounded-full bg-orange-100 text-orange-700 text-xs font-medium">
-                        {index + 1}
-                      </span>
-                      <span className="font-medium text-slate-700">
-                        {item.group.marca || "Sin especificar"}
-                      </span>
-                    </div>
-                    <span className="px-2 py-1 bg-orange-100 text-orange-700 rounded-full text-sm font-medium">
-                      {item.count}
-                    </span>
-                  </div>
-                ))
-              ) : (
-                <p className="text-slate-500 text-center py-4">
-                  No hay datos disponibles
-                </p>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+        <RankingList title="Top provincias" icon={MapPin} items={provincias} fieldKey="provincia" />
+        <RankingList title="Tipos de vehículo" icon={Car} items={tiposVehiculo} fieldKey="tipoVehiculo" />
+        <RankingList title="Top marcas" icon={Building} items={marcas} fieldKey="marca" />
       </div>
 
       {/* Resumen de estadísticas */}
-      <Card className="bg-slate-50">
-        <CardContent className="p-6">
-          <div className="flex items-center gap-3">
-            <BarChart3 className="w-6 h-6 text-slate-600" />
-            <div>
-              <h3 className="font-medium text-slate-900">
-                Resumen de Estadísticas
-              </h3>
-              <p className="text-sm text-slate-600">
-                Datos actualizados en tiempo real desde la base de datos. Total
-                de {totalClientes} clientes registrados distribuidos en{" "}
-                {provincias.length} provincias diferentes.
-              </p>
-            </div>
+      <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+        <div className="flex items-center gap-3">
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
+            <BarChart3 className="size-5" strokeWidth={1.75} aria-hidden />
+          </span>
+          <div>
+            <h3 className="text-[16.5px] font-semibold text-gray-900">Resumen de estadísticas</h3>
+            <p className="text-[16px] text-gray-500">
+              Datos actualizados en tiempo real desde la base de datos. Total de {totalClientes} clientes
+              registrados distribuidos en {provincias.length} provincias diferentes.
+            </p>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   );
 }

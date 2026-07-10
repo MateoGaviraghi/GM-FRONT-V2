@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import { ChevronDown, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 
@@ -36,24 +36,38 @@ export function AutocompleteInput({
   noOptionsText = "No se encontraron opciones",
 }: AutocompleteInputProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [filteredOptions, setFilteredOptions] = useState<string[]>([]);
+  const [textoLocal, setTextoLocal] = useState(value);
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Sincronizar el texto local si el value cambia desde afuera
+  useEffect(() => {
+    setTextoLocal(value);
+  }, [value]);
+
+  // Limpiar el debounce pendiente al desmontar
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, []);
 
   // Filtrar opciones basado en el texto ingresado
-  useEffect(() => {
-    if (!value) {
-      setFilteredOptions(options);
-    } else {
-      const filtered = options.filter((option) =>
-        option.toLowerCase().includes(value.toLowerCase())
-      );
-      setFilteredOptions(filtered);
+  const filteredOptions = useMemo(() => {
+    if (!textoLocal) {
+      return options;
     }
+    return options.filter((option) =>
+      option.toLowerCase().includes(textoLocal.toLowerCase())
+    );
+  }, [textoLocal, options]);
+
+  useEffect(() => {
     setHighlightedIndex(-1);
-  }, [value, options]);
+  }, [textoLocal, options]);
 
   // Cerrar dropdown al hacer click fuera
   useEffect(() => {
@@ -75,8 +89,12 @@ export function AutocompleteInput({
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newValue = e.target.value;
-    onChange(newValue);
+    setTextoLocal(newValue);
     setIsOpen(true);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      onChange(newValue);
+    }, 150);
   };
 
   const handleInputFocus = () => {
@@ -91,6 +109,8 @@ export function AutocompleteInput({
   };
 
   const handleOptionSelect = (option: string) => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    setTextoLocal(option);
     onChange(option);
     setIsOpen(false);
     setHighlightedIndex(-1);
@@ -126,7 +146,7 @@ export function AutocompleteInput({
           highlightedIndex < filteredOptions.length
         ) {
           handleOptionSelect(filteredOptions[highlightedIndex]);
-        } else if (allowCustom && value) {
+        } else if (allowCustom && textoLocal) {
           setIsOpen(false);
         }
         break;
@@ -152,6 +172,8 @@ export function AutocompleteInput({
 
   const clearValue = (e: React.MouseEvent) => {
     e.stopPropagation();
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    setTextoLocal("");
     onChange("");
     inputRef.current?.focus();
   };
@@ -173,7 +195,7 @@ export function AutocompleteInput({
 
   const showOptions = isOpen && !loading && filteredOptions.length > 0;
   const showNoOptions =
-    isOpen && !loading && filteredOptions.length === 0 && value;
+    isOpen && !loading && filteredOptions.length === 0 && textoLocal;
 
   return (
     <div ref={containerRef} className="relative w-full">
@@ -184,7 +206,7 @@ export function AutocompleteInput({
           id={id}
           name={name}
           type="text"
-          value={value}
+          value={textoLocal}
           onChange={handleInputChange}
           onFocus={handleInputFocus}
           onBlur={handleInputBlur}
@@ -197,7 +219,7 @@ export function AutocompleteInput({
 
         {/* Botones de control */}
         <div className="absolute right-2 top-1/2 transform -translate-y-1/2 flex items-center gap-1">
-          {value && !disabled && (
+          {textoLocal && !disabled && (
             <button
               type="button"
               onClick={clearValue}
