@@ -16,7 +16,7 @@ export function ScrollToTopButton() {
       }
     };
 
-    window.addEventListener("scroll", toggleVisibility);
+    window.addEventListener("scroll", toggleVisibility, { passive: true });
     return () => window.removeEventListener("scroll", toggleVisibility);
   }, []);
 
@@ -32,10 +32,24 @@ export function ScrollToTopButton() {
       {isVisible && (
         <button
           onClick={scrollToTop}
-          className="fixed bottom-6 right-6 bg-cyan-500 hover:bg-cyan-600 text-white p-5 rounded-full shadow-xl transition-all duration-300 z-50 hover:scale-110"
+          className="animate-fade-in fixed bottom-6 right-6 z-50 flex size-12 items-center justify-center border backdrop-blur-sm transition-colors duration-300"
+          style={{
+            background: "color-mix(in oklab, var(--gm-carbon-0) 85%, transparent)",
+            borderColor: "var(--gm-line-dark-2)",
+            color: "var(--gm-platinum)",
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = "var(--gm-platinum)";
+            e.currentTarget.style.color = "var(--gm-carbon-0)";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background =
+              "color-mix(in oklab, var(--gm-carbon-0) 85%, transparent)";
+            e.currentTarget.style.color = "var(--gm-platinum)";
+          }}
           aria-label="Volver arriba"
         >
-          <ArrowUp className="w-7 h-7" />
+          <ArrowUp className="size-5" strokeWidth={1.5} />
         </button>
       )}
     </>

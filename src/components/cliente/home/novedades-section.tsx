@@ -1,18 +1,38 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { ChevronLeft, ChevronRight, Mail, Newspaper } from "lucide-react";
+import { ArrowLeft, ArrowRight, ArrowUpRight, Newspaper } from "lucide-react";
+import gsap from "gsap";
+import { ScrollTrigger } from "gsap/ScrollTrigger";
+import { useGSAP } from "@gsap/react";
 import { novedadService } from "@/services";
 import type { Novedad } from "@/types";
+import { SectionHeading } from "./gm/section-heading";
+import { GmButton } from "./gm/gm-button";
+import { cn, formatShortDate } from "@/lib/utils";
 
-export function NovedadesSection() {
+gsap.registerPlugin(ScrollTrigger, useGSAP);
+
+const ITEMS_PER_SLIDE = 3;
+
+type NovedadesSectionProps = {
+  /** Data resuelta en el servidor (ISR). null = fallback a fetch en cliente. */
+  initialNovedades?: Novedad[] | null;
+};
+
+export function NovedadesSection({
+  initialNovedades = null,
+}: NovedadesSectionProps) {
   const [currentSlide, setCurrentSlide] = useState(0);
-  const [novedades, setNovedades] = useState<Novedad[]>([]);
+  const [novedades, setNovedades] = useState<Novedad[]>(
+    initialNovedades ?? []
+  );
 
-  // Cargar novedades desde la API
+  // Fallback: cargar en cliente solo si el servidor no trajo data
   useEffect(() => {
+    if (initialNovedades !== null) return;
     const loadNovedades = async () => {
       try {
         const params = {
@@ -29,181 +49,194 @@ export function NovedadesSection() {
       }
     };
     loadNovedades();
-  }, []);
+  }, [initialNovedades]);
 
-  const itemsPerSlide = 3;
-  const totalSlides = Math.ceil(novedades.length / itemsPerSlide);
+  const novedadesGridRef = useRef<HTMLDivElement>(null);
 
-  const nextSlide = () => {
-    setCurrentSlide((prev) => (prev + 1) % totalSlides);
-  };
+  /* Entrada en cascada de las cards (clip-path), disparada cuando la data
+     async ya existe; el ScrollTrigger previo se mata solo al re-ejecutar. */
+  useGSAP(
+    () => {
+      const grid = novedadesGridRef.current;
+      if (!grid) return;
+      const cards = grid.querySelectorAll<HTMLElement>("[data-home-card]");
+      if (!cards.length) return;
+      const reduce = window.matchMedia(
+        "(prefers-reduced-motion: reduce)"
+      ).matches;
+      if (reduce) {
+        gsap.set(cards, { clearProps: "all" });
+        return;
+      }
+      gsap.fromTo(
+        cards,
+        { clipPath: "inset(0 100% 100% 0)", opacity: 0 },
+        {
+          clipPath: "inset(0% 0% 0% 0%)",
+          opacity: 1,
+          duration: 0.75,
+          ease: "power3.out",
+          stagger: { each: 0.05, grid: "auto", from: "start" },
+          scrollTrigger: { trigger: grid, start: "top 88%", once: true },
+          clearProps: "clipPath",
+        }
+      );
+    },
+    { scope: novedadesGridRef, dependencies: [novedades.length] }
+  );
 
-  const prevSlide = () => {
+  const totalSlides = Math.ceil(novedades.length / ITEMS_PER_SLIDE);
+  const nextSlide = () => setCurrentSlide((prev) => (prev + 1) % totalSlides);
+  const prevSlide = () =>
     setCurrentSlide((prev) => (prev - 1 + totalSlides) % totalSlides);
-  };
+
+  const controlBtn =
+    "flex size-11 items-center justify-center border border-line-dark-2 text-platinum transition-colors duration-300 hover:bg-platinum hover:text-carbon-0";
 
   return (
-    <section className="relative bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white py-20 overflow-hidden">
-      {/* Efectos de fondo */}
-      <div className="absolute inset-0">
-        <div className="absolute top-20 left-20 w-72 h-72 bg-cyan-500/5 rounded-full blur-3xl animate-pulse"></div>
-        <div className="absolute bottom-20 right-20 w-96 h-96 bg-blue-500/5 rounded-full blur-3xl animate-pulse delay-700"></div>
-        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-80 h-80 bg-slate-500/5 rounded-full blur-3xl animate-pulse delay-1000"></div>
-      </div>
+    <section className="relative overflow-hidden border-t border-line-dark bg-carbon-1 py-20 text-platinum sm:py-24 lg:py-28">
+      <div className="mx-auto w-full max-w-[1480px] px-5 sm:px-8 lg:px-12">
+        <SectionHeading
+          index="05"
+          label="Prensa y lanzamientos"
+          title="Novedades"
+          sub="Mantente al día con las últimas actualizaciones y lanzamientos"
+          theme="dark"
+          aside={
+            novedades.length > 0 && totalSlides > 1 ? (
+              <div className="flex items-center gap-4">
+                <span className="gm-label text-steel">
+                  {String(currentSlide + 1).padStart(2, "0")} /{" "}
+                  {String(totalSlides).padStart(2, "0")}
+                </span>
+                <div className="flex">
+                  <button
+                    type="button"
+                    onClick={prevSlide}
+                    className={controlBtn}
+                    aria-label="Anterior"
+                  >
+                    <ArrowLeft strokeWidth={1.5} className="size-5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={nextSlide}
+                    className={cn(controlBtn, "-ml-px")}
+                    aria-label="Siguiente"
+                  >
+                    <ArrowRight strokeWidth={1.5} className="size-5" />
+                  </button>
+                </div>
+              </div>
+            ) : undefined
+          }
+        />
 
-      <div className="relative container mx-auto px-4">
-        {/* Header */}
-        <div className="text-center mb-16">
-          <h2 className="text-5xl md:text-7xl font-extrabold bg-gradient-to-r from-white via-cyan-200 to-blue-200 bg-clip-text text-transparent mb-6 tracking-tight">
-            NOVEDADES
-          </h2>
-          <div className="flex items-center justify-center gap-4 mb-4">
-            <div className="h-1 w-32 bg-gradient-to-r from-transparent via-cyan-400 to-blue-400 rounded-full"></div>
-            <div className="w-3 h-3 bg-cyan-400 rounded-full animate-pulse"></div>
-            <div className="h-1 w-32 bg-gradient-to-l from-transparent via-cyan-400 to-blue-400 rounded-full"></div>
-          </div>
-          <p className="text-cyan-200 text-lg max-w-2xl mx-auto">
-            Mantente al día con las últimas actualizaciones y lanzamientos
-          </p>
-        </div>
-
-        {/* Carrusel de Novedades */}
-        {novedades.length > 0 ? (
-          <div className="relative">
-            {totalSlides > 1 && (
-              <button
-                onClick={prevSlide}
-                className="absolute left-0 top-1/2 -translate-y-1/2 z-10 w-16 h-16 bg-white/10 backdrop-blur-sm hover:bg-white/20 rounded-full flex items-center justify-center transition-all duration-300 shadow-2xl hover:scale-110 -translate-x-8 group border border-white/20"
-                aria-label="Anterior"
-              >
-                <ChevronLeft className="w-8 h-8 text-white group-hover:scale-110 transition-transform" />
-              </button>
-            )}
-
-            <div className="overflow-hidden">
+        <div className="mt-12">
+          {novedades.length > 0 ? (
+            <div ref={novedadesGridRef} className="overflow-hidden">
               <div
-                className="flex transition-transform duration-700 ease-in-out"
-                style={{
-                  transform: `translateX(-${currentSlide * 100}%)`,
-                }}
+                className="flex transition-transform duration-700 ease-[cubic-bezier(0.83,0,0.17,1)]"
+                style={{ transform: `translateX(-${currentSlide * 100}%)` }}
               >
                 {Array.from({ length: totalSlides }).map((_, slideIndex) => {
                   const itemsInSlide = novedades.slice(
-                    slideIndex * itemsPerSlide,
-                    (slideIndex + 1) * itemsPerSlide
+                    slideIndex * ITEMS_PER_SLIDE,
+                    (slideIndex + 1) * ITEMS_PER_SLIDE
                   );
-                  const shouldCenter = itemsInSlide.length < itemsPerSlide;
-
                   return (
                     <div
                       key={slideIndex}
-                      className={`min-w-full grid gap-8 px-4 ${
-                        shouldCenter ? "justify-items-center" : ""
-                      }`}
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns:
-                          itemsInSlide.length < 3
-                            ? `repeat(${itemsInSlide.length}, minmax(0, 400px))`
-                            : "repeat(3, minmax(0, 1fr))",
-                        justifyContent: shouldCenter ? "center" : "stretch",
-                      }}
+                      className="flex min-w-full flex-wrap justify-center gap-6"
                     >
                       {itemsInSlide.map((novedad) => (
-                        <Link
+                        <div
                           key={novedad._id}
-                          href={`/novedades/${novedad._id}`}
-                          className="group bg-slate-800/50 backdrop-blur-sm rounded-3xl overflow-hidden shadow-xl hover:shadow-2xl hover:shadow-cyan-500/20 transition-all duration-500 hover:-translate-y-2 max-w-md mx-auto w-full border border-slate-700/50"
+                          data-home-card
+                          className="w-full sm:w-[calc(50%-0.75rem)] lg:w-[calc(25%-1.125rem)]"
                         >
-                          {/* Imagen */}
-                          <div className="relative h-64 bg-slate-700 overflow-hidden">
-                            {novedad.imagenes &&
-                            novedad.imagenes.length > 0 &&
-                            novedad.imagenes[0]?.thumbnails?.large ? (
-                              <Image
-                                src={novedad.imagenes[0].thumbnails.large}
-                                alt={novedad.titulo || "Novedad"}
-                                fill
-                                className="object-cover group-hover:scale-110 transition-transform duration-700"
-                                quality={100}
-                                unoptimized
-                                sizes="(max-width: 768px) 100vw, 400px"
-                              />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center bg-slate-700">
-                                <Newspaper className="w-16 h-16 text-slate-500" />
-                              </div>
-                            )}
-                            {/* Badge de categoría sobre la imagen */}
-                            {novedad.categoria && (
-                              <div className="absolute top-4 left-4 bg-cyan-500 text-white px-4 py-2 rounded-full text-sm font-bold shadow-lg z-10">
-                                {novedad.categoria}
-                              </div>
-                            )}
-                          </div>
+                          <Link
+                            href={`/novedades/${novedad._id}`}
+                            className="group flex h-full w-full flex-col border border-line-dark bg-carbon-2/40 transition-colors duration-500 hover:bg-carbon-2"
+                          >
+                            <div className="relative aspect-[16/10] overflow-hidden border-b border-line-dark bg-carbon-2">
+                              {novedad.imagenes &&
+                              novedad.imagenes.length > 0 &&
+                              novedad.imagenes[0]?.thumbnails?.large ? (
+                                <Image
+                                  src={novedad.imagenes[0].thumbnails.large}
+                                  alt={novedad.titulo || "Novedad"}
+                                  fill
+                                  sizes="(max-width: 768px) 100vw, 33vw"
+                                  className="object-cover transition-transform duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:scale-[1.04]"
+                                />
+                              ) : (
+                                <div className="flex h-full w-full items-center justify-center">
+                                  <Newspaper
+                                    strokeWidth={1}
+                                    className="size-14 text-steel"
+                                  />
+                                </div>
+                              )}
+                              {novedad.categoria ? (
+                                <span className="gm-label absolute left-4 top-4 border border-line-dark-2 bg-carbon-0/70 px-2.5 py-1.5 text-petrol-bright backdrop-blur-sm">
+                                  {novedad.categoria}
+                                </span>
+                              ) : null}
+                            </div>
 
-                          {/* Contenido */}
-                          <div className="p-6">
-                            <h3 className="text-xl font-extrabold text-white mb-3 group-hover:text-cyan-400 transition-colors line-clamp-2 min-h-[56px]">
-                              {novedad.titulo}
-                            </h3>
-
-                            {novedad.resumen && (
-                              <p className="text-slate-300 text-sm mb-4 line-clamp-3">
-                                {novedad.resumen}
-                              </p>
-                            )}
-
-                            {/* Botón de leer más */}
-                            <button className="inline-flex items-center gap-2 bg-slate-700/50 hover:bg-slate-600/50 text-cyan-400 hover:text-cyan-300 px-5 py-2.5 rounded-lg font-semibold text-sm transition-all duration-300 group-hover:gap-3 border border-slate-600/50">
-                              <span>Leer más</span>
-                              <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                            </button>
-                          </div>
-                        </Link>
+                            <div className="flex flex-1 flex-col p-6">
+                              {novedad.fechaPublicacion ? (
+                                <time className="gm-label text-steel">
+                                  {formatShortDate(novedad.fechaPublicacion)}
+                                </time>
+                              ) : null}
+                              <h3 className="gm-display mt-3 line-clamp-2 min-h-[2.6em] text-lg text-platinum">
+                                {novedad.titulo}
+                              </h3>
+                              {novedad.resumen ? (
+                                <p className="mt-3 line-clamp-3 text-sm leading-relaxed text-silver">
+                                  {novedad.resumen}
+                                </p>
+                              ) : null}
+                              <span className="mt-auto flex items-center gap-2 pt-6">
+                                <span className="gm-underline gm-label text-petrol-bright">
+                                  Leer más
+                                </span>
+                                <ArrowUpRight
+                                  aria-hidden
+                                  strokeWidth={1.5}
+                                  className="size-4 text-petrol-bright transition-transform duration-300 group-hover:translate-x-0.5 group-hover:-translate-y-0.5"
+                                />
+                              </span>
+                            </div>
+                          </Link>
+                        </div>
                       ))}
                     </div>
                   );
                 })}
               </div>
             </div>
-
-            {totalSlides > 1 && (
-              <button
-                onClick={nextSlide}
-                className="absolute right-0 top-1/2 -translate-y-1/2 z-10 w-16 h-16 bg-white/10 backdrop-blur-sm hover:bg-white/20 rounded-full flex items-center justify-center transition-all duration-300 shadow-2xl hover:scale-110 translate-x-8 group border border-white/20"
-                aria-label="Siguiente"
-              >
-                <ChevronRight className="w-8 h-8 text-white group-hover:scale-110 transition-transform" />
-              </button>
-            )}
-          </div>
-        ) : (
-          <div className="text-center py-16 bg-white/5 backdrop-blur-sm rounded-3xl border-2 border-dashed border-white/20">
-            <div className="max-w-lg mx-auto">
-              <div className="w-20 h-20 bg-white/10 backdrop-blur-sm rounded-full flex items-center justify-center mx-auto mb-6">
-                <Mail className="w-10 h-10 text-cyan-400" />
+          ) : (
+            <div className="border border-line-dark bg-carbon-2/30 px-6 py-16 text-center sm:px-10">
+              <div className="mx-auto max-w-lg">
+                <h3 className="gm-display text-display-3 text-platinum">
+                  Próximamente nuevas novedades
+                </h3>
+                <p className="mt-4 text-base leading-relaxed text-silver sm:text-lg">
+                  Mantente informado sobre las últimas actualizaciones
+                </p>
               </div>
-              <h3 className="text-2xl font-bold text-white mb-4">
-                Próximamente nuevas novedades
-              </h3>
-              <p className="text-cyan-200 mb-6 text-lg">
-                Mantente informado sobre las últimas actualizaciones
-              </p>
             </div>
-          </div>
-        )}
+          )}
+        </div>
 
-        {/* Botón Ver Más */}
         {novedades.length > 0 && (
-          <div className="text-center mt-12">
-            <Link
-              href="/novedades"
-              className="inline-flex items-center gap-3 bg-gradient-to-r from-cyan-500 via-cyan-600 to-blue-600 hover:from-cyan-600 hover:via-blue-600 hover:to-blue-700 text-white px-10 py-5 rounded-full font-bold text-xl transition-all duration-300 transform hover:scale-105 shadow-2xl hover:shadow-cyan-500/50"
-            >
-              <span>VER TODAS LAS NOVEDADES</span>
-              <ChevronRight className="w-6 h-6" />
-            </Link>
+          <div className="mt-12 flex justify-end border-t border-line-dark pt-8">
+            <GmButton href="/novedades" tone="outlineDark">
+              Ver todas las novedades
+            </GmButton>
           </div>
         )}
       </div>

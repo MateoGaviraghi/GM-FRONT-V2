@@ -1,5 +1,7 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:is(.dark *));
+
 :root {
   /* Colores base */
   --background: #ffffff;
@@ -21,6 +23,229 @@
   --border: #e2e8f0; /* slate-200 */
   --input: #e2e8f0; /* slate-200 */
   --ring: #0891b2; /* cyan-600 */
+
+  /* ============================================================
+     GM SHOWROOM SYSTEM — premium automotive tokens (OKLCH)
+     Carbon / platinum neutrals + petrol accent. Sharp geometry.
+     ============================================================ */
+
+  /* Carbon (dark surfaces) — cool graphite, deliberate temperature */
+  --gm-carbon-0: oklch(0.135 0.008 255); /* deepest: hero, footer       */
+  --gm-carbon-1: oklch(0.165 0.009 255); /* section base                */
+  --gm-carbon-2: oklch(0.205 0.011 255); /* raised panel / card         */
+  --gm-carbon-3: oklch(0.25 0.012 255); /* hover lift                  */
+
+  /* Paper (light surfaces) — cold porcelain, not flat white */
+  --gm-paper-0: oklch(0.962 0.004 250); /* light section base          */
+  --gm-paper-1: oklch(0.985 0.003 250); /* raised card on light        */
+  --gm-paper-2: oklch(0.935 0.005 250); /* sunken fill                 */
+
+  /* Ink & platinum (text) */
+  --gm-ink-0: oklch(0.17 0.012 255); /* primary text on light       */
+  --gm-ink-1: oklch(0.38 0.014 255); /* secondary on light          */
+  --gm-ink-2: oklch(0.52 0.012 255); /* muted on light              */
+  --gm-platinum: oklch(0.945 0.004 250); /* primary text on dark        */
+  --gm-silver: oklch(0.74 0.01 250); /* secondary on dark           */
+  --gm-steel: oklch(0.56 0.012 252); /* muted on dark               */
+
+  /* Hairlines */
+  --gm-line-dark: oklch(1 0 0 / 0.1); /* 1px lines on carbon         */
+  --gm-line-dark-2: oklch(1 0 0 / 0.18); /* stronger on hover           */
+  --gm-line-light: oklch(0.17 0.012 255 / 0.12);
+  --gm-line-light-2: oklch(0.17 0.012 255 / 0.26);
+  --gm-line-strong: oklch(0.74 0.01 250); /* visible 2px border — admin "Mostrador" (A0R) */
+
+  /* Petrol accent — evolved from brand cyan, used sparingly */
+  --gm-petrol: oklch(0.6 0.1 215);
+  --gm-petrol-bright: oklch(0.79 0.108 207); /* on dark surfaces  */
+  --gm-petrol-deep: oklch(0.46 0.085 220); /* on light surfaces */
+  --gm-petrol-dim: oklch(0.6 0.1 215 / 0.14);
+
+  /* Semantic status accents — dry, not neon (Cabina admin kit, A0) */
+  --gm-danger: oklch(0.62 0.19 25);
+  --gm-success: oklch(0.68 0.14 155);
+  --gm-warn: oklch(0.78 0.12 85);
+
+  /* Semantic status — text-safe on WHITE (admin "Mostrador", A0R). The tokens
+     above are tuned for carbon (dark) backgrounds and fall short of 4.5:1 on
+     white; these darker siblings are for text/icons/borders on paper/white. */
+  --gm-danger-text: oklch(0.585 0.19 25); /* 4.6:1 on white */
+  --gm-success-text: oklch(0.545 0.14 155); /* 4.6:1 on white */
+  --gm-warn-text: oklch(0.56 0.12 85); /* 4.7:1 on white */
+
+  /* Motion */
+  --gm-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --gm-ease-inout: cubic-bezier(0.83, 0, 0.17, 1);
+  --gm-dur-1: 180ms;
+  --gm-dur-2: 360ms;
+  --gm-dur-3: 700ms;
+}
+
+/* ============================================================
+   Map GM tokens → Tailwind v4 utilities
+   ============================================================ */
+@theme inline {
+  --color-carbon-0: var(--gm-carbon-0);
+  --color-carbon-1: var(--gm-carbon-1);
+  --color-carbon-2: var(--gm-carbon-2);
+  --color-carbon-3: var(--gm-carbon-3);
+  --color-paper-0: var(--gm-paper-0);
+  --color-paper-1: var(--gm-paper-1);
+  --color-paper-2: var(--gm-paper-2);
+  --color-ink-0: var(--gm-ink-0);
+  --color-ink-1: var(--gm-ink-1);
+  --color-ink-2: var(--gm-ink-2);
+  --color-platinum: var(--gm-platinum);
+  --color-silver: var(--gm-silver);
+  --color-steel: var(--gm-steel);
+  --color-line-dark: var(--gm-line-dark);
+  --color-line-dark-2: var(--gm-line-dark-2);
+  --color-line-light: var(--gm-line-light);
+  --color-line-light-2: var(--gm-line-light-2);
+  --color-petrol: var(--gm-petrol);
+  --color-petrol-bright: var(--gm-petrol-bright);
+  --color-petrol-deep: var(--gm-petrol-deep);
+  --color-petrol-dim: var(--gm-petrol-dim);
+  --color-danger: var(--gm-danger);
+  --color-success: var(--gm-success);
+  --color-warn: var(--gm-warn);
+  --color-danger-text: var(--gm-danger-text);
+  --color-success-text: var(--gm-success-text);
+  --color-warn-text: var(--gm-warn-text);
+  --color-line-strong: var(--gm-line-strong);
+
+  --font-display: var(--font-archivo), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-instrument), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, "SFMono-Regular", monospace;
+
+  /* Fluid display scale */
+  --text-display-1: clamp(2.7rem, 1.4rem + 6vw, 6.8rem);
+  --text-display-1--line-height: 0.95;
+  --text-display-1--letter-spacing: -0.015em;
+  --text-display-2: clamp(2.1rem, 1.3rem + 3.4vw, 4.6rem);
+  --text-display-2--line-height: 0.98;
+  --text-display-2--letter-spacing: -0.01em;
+  --text-display-3: clamp(1.35rem, 1.05rem + 1.3vw, 2.1rem);
+  --text-display-3--line-height: 1.05;
+
+  --ease-gm: var(--gm-ease-out);
+  --ease-gm-inout: var(--gm-ease-inout);
+  --animate-marquee: marquee var(--duration) infinite linear;
+  --animate-marquee-vertical: marquee-vertical var(--duration) linear infinite;
+  @keyframes marquee {
+  from {
+    transform: translateX(0);
+    }
+  to {
+    transform: translateX(calc(-100% - var(--gap)));
+    }
+  }
+  @keyframes marquee-vertical {
+  from {
+    transform: translateY(0);
+    }
+  to {
+    transform: translateY(calc(-100% - var(--gap)));
+    }
+  }
+  --animate-shine: shine var(--duration) infinite linear
+;
+  @keyframes shine {
+  0% {
+    background-position: 0% 0%;
+    }
+  50% {
+    background-position: 100% 100%;
+    }
+  to {
+    background-position: 0% 0%;
+    }
+  }}
+
+/* ============================================================
+   GM component-level language
+   ============================================================ */
+@layer components {
+  /* Display voice: Archivo expanded, uppercase, engineering-tight */
+  .gm-display {
+    font-family: var(--font-display);
+    font-stretch: 125%;
+    font-weight: 640;
+    text-transform: uppercase;
+    text-wrap: balance;
+  }
+
+  /* Technical eyebrow / metadata label */
+  .gm-label {
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    font-weight: 500;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+  }
+
+  /* Underline reveal (links) */
+  .gm-underline {
+    position: relative;
+  }
+  .gm-underline::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    bottom: -3px;
+    height: 1px;
+    width: 100%;
+    background: currentColor;
+    transform: scaleX(0);
+    transform-origin: right center;
+    transition: transform var(--gm-dur-2) var(--gm-ease-out);
+  }
+  .gm-underline:hover::after,
+  a:hover .gm-underline::after,
+  .group:hover .gm-underline::after {
+    transform: scaleX(1);
+    transform-origin: left center;
+  }
+
+  /* Cinematic grain — kills the flat AI look */
+  .gm-grain::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    opacity: 0.038;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.78' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    background-size: 160px 160px;
+  }
+
+  /* Engineering crosshair mark */
+  .gm-plus {
+    position: relative;
+    display: inline-block;
+    width: 9px;
+    height: 9px;
+  }
+  .gm-plus::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background:
+      linear-gradient(currentColor, currentColor) center / 9px 1px no-repeat,
+      linear-gradient(currentColor, currentColor) center / 1px 9px no-repeat;
+  }
+}
+
+/* Distinctive focus — petrol, offset, square */
+:focus-visible {
+  outline: 2px solid var(--gm-petrol-bright);
+  outline-offset: 3px;
+  border-radius: 0;
+}
+
+::selection {
+  background: var(--gm-petrol);
+  color: white;
 }
 
 /* Animaciones Keyframes */
@@ -51,6 +276,84 @@
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+/* GM keyframes */
+@keyframes gm-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(calc(-100% - var(--gap)));
+  }
+}
+
+@keyframes gm-scroll-cue {
+  0% {
+    transform: scaleY(0);
+    transform-origin: top;
+  }
+  45% {
+    transform: scaleY(1);
+    transform-origin: top;
+  }
+  55% {
+    transform: scaleY(1);
+    transform-origin: bottom;
+  }
+  100% {
+    transform: scaleY(0);
+    transform-origin: bottom;
+  }
+}
+
+@keyframes gm-border-beam {
+  to {
+    offset-distance: 100%;
+  }
+}
+
+/* ============================================================
+   Cabina (admin kit, A0) — modal / toast / shimmer keyframes
+   ============================================================ */
+@keyframes gm-modal-in {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes gm-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes gm-toast-drain {
+  from {
+    width: 100%;
+  }
+  to {
+    width: 0%;
+  }
+}
+
+@keyframes gm-shimmer {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(100%);
   }
 }
 
@@ -118,5 +421,17 @@ body {
   body {
     font-size: 16px;
     line-height: 1.5;
+  }
+}
+
+/* Honor reduced motion globally */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

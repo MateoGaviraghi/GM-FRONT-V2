@@ -1,26 +1,31 @@
 "use client";
 
-import { useState } from "react";
-import {
-  Car,
-  ArrowLeft,
-  Upload,
-  X,
-  Save,
-  Eye,
-  AlertCircle,
-  Image as ImageIcon,
-  Video,
-  Settings,
-} from "lucide-react";
-import Link from "next/link";
-import Image from "next/image";
+import { useRef, useState } from "react";
+import { Save, Loader2, Image as ImageIcon, AlertCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { usadosService } from "@/services";
 import {
   DynamicUsadosAutocomplete,
   DynamicUsadosModeloAutocomplete,
 } from "@/components/dynamic-usados-autocomplete";
+import {
+  AdminButton,
+  AutocompleteFieldShell,
+  Breadcrumb,
+  DraftBanner,
+  Field,
+  FormSection,
+  FormShell,
+  mapApiError,
+  MediaUploadZone,
+  type MediaPreview,
+  SelectField,
+  TextareaField,
+  TextInput,
+  useFormDraft,
+  useToast,
+  useUnsavedGuard,
+} from "@/components/admin/kit";
 
 interface FormData {
   titulo: string;
@@ -54,43 +59,100 @@ interface FormErrors {
   [key: string]: string;
 }
 
+const EQUIPAMIENTO_OPCIONES = [
+  "ABS",
+  "Airbags frontales",
+  "Airbags laterales",
+  "Aire acondicionado",
+  "Alarma",
+  "Bluetooth",
+  "Cámara de retroceso",
+  "Cierre centralizado",
+  "Control de crucero",
+  "Control de estabilidad",
+  "Control de tracción",
+  "Cristales eléctricos",
+  "Dirección asistida",
+  "Espejos eléctricos",
+  "Faros antiniebla",
+  "Llantas de aleación",
+  "Sensor de estacionamiento",
+  "Techo solar",
+];
+
+const INITIAL_FORM_DATA: FormData = {
+  titulo: "",
+  marca: "",
+  modelo: "",
+  anio: new Date().getFullYear().toString(),
+  kilometraje: "",
+  version: "",
+  tipoVehiculo: "",
+  tipoCombustible: "",
+  motor: "",
+  transmision: "",
+  traccion: "",
+  potencia: "",
+  cilindrada: "",
+  capacidadCarga: "",
+  sistemaFrenado: "",
+  color: "",
+  cantidadPuertas: "",
+  cantidadAsientos: "",
+  descripcion: "",
+};
+
+type DraftShape = {
+  formData: FormData;
+  equipamiento: string[];
+};
+
+// Estilo de campo compartido para que los autocompletes existentes (que
+// aceptan className) calcen con el resto de los inputs del kit Soft SaaS (4R3).
+const AUTOCOMPLETE_CLASSNAME =
+  "h-11 w-full rounded-lg border border-gray-200 bg-white px-3.5 text-[16px] text-gray-900 placeholder:text-gray-400 transition-[border-color,box-shadow] duration-150 focus:border-gray-900 focus:ring-4 focus:ring-gray-900/5 focus:outline-none focus-visible:outline-none";
+
 export default function CrearUsados() {
   const router = useRouter();
+  const { showToast } = useToast();
 
   // Estados del formulario
-  const [formData, setFormData] = useState<FormData>({
-    titulo: "",
-    marca: "",
-    modelo: "",
-    anio: new Date().getFullYear().toString(),
-    kilometraje: "",
-    version: "",
-    tipoVehiculo: "",
-    tipoCombustible: "",
-    motor: "",
-    transmision: "",
-    traccion: "",
-    potencia: "",
-    cilindrada: "",
-    capacidadCarga: "",
-    sistemaFrenado: "",
-    color: "",
-    cantidadPuertas: "",
-    cantidadAsientos: "",
-    descripcion: "",
-  });
+  const [formData, setFormData] = useState<FormData>(INITIAL_FORM_DATA);
 
   // Estados de archivos
   const [imageFiles, setImageFiles] = useState<FilePreview[]>([]);
   const [videoFiles, setVideoFiles] = useState<FilePreview[]>([]);
   const [fotoSinFondo1, setFotoSinFondo1] = useState<File | null>(null);
   const [fotoSinFondo2, setFotoSinFondo2] = useState<File | null>(null);
+  const [fotoSinFondo1Preview, setFotoSinFondo1Preview] = useState<string | null>(null);
+  const [fotoSinFondo2Preview, setFotoSinFondo2Preview] = useState<string | null>(null);
   const [equipamiento, setEquipamiento] = useState<string[]>([]);
 
   // Estados de validación y UI
   const [errors, setErrors] = useState<FormErrors>({});
   const [loading, setLoading] = useState(false);
-  const [preview, setPreview] = useState(false);
+
+  // Borrador (elderly-first: nunca perder una carga a mitad de hacer)
+  const { hasDraft, restoreDraft, dismissDraft, clearDraft } =
+    useFormDraft<DraftShape>(
+      "usado-crear",
+      { formData, equipamiento },
+      (draft) => {
+        setFormData(draft.formData ?? INITIAL_FORM_DATA);
+        setEquipamiento(draft.equipamiento ?? []);
+      },
+    );
+
+  const initialSnapshotRef = useRef(JSON.stringify(INITIAL_FORM_DATA));
+  const isDirty =
+    JSON.stringify(formData) !== initialSnapshotRef.current ||
+    equipamiento.length > 0 ||
+    imageFiles.length > 0 ||
+    videoFiles.length > 0 ||
+    Boolean(fotoSinFondo1) ||
+    Boolean(fotoSinFondo2);
+
+  useUnsavedGuard(isDirty);
 
   // Validaciones
   const validateForm = (): boolean => {
@@ -169,35 +231,8 @@ export default function CrearUsados() {
     }
   };
 
-  // Validar archivos antes de agregarlos
-  const validateFile = (file: File, type: "image" | "video"): string | null => {
-    const maxSizes = {
-      image: 20 * 1024 * 1024, // 20MB (actualizado para Cloudinary)
-      video: 50 * 1024 * 1024, // 50MB
-    };
-
-    const allowedFormats = {
-      image: ["image/jpeg", "image/jpg", "image/png", "image/webp"],
-      video: ["video/mp4", "video/mov", "video/avi"],
-    };
-
-    if (file.size > maxSizes[type]) {
-      return `El archivo excede el tamaño máximo de ${
-        type === "image" ? "20MB" : "50MB"
-      }`;
-    }
-
-    if (!allowedFormats[type].includes(file.type)) {
-      return `Formato no permitido. Use: ${allowedFormats[type].join(", ")}`;
-    }
-
-    return null;
-  };
-
-  // Manejar subida de imágenes
-  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(event.target.files || []);
-
+  // Manejo de archivos — adaptador mínimo: MediaUploadZone entrega File[] ya comprimidos.
+  const handleImageFilesSelected = (files: File[]) => {
     if (imageFiles.length + files.length > 10) {
       setErrors((prev) => ({
         ...prev,
@@ -207,74 +242,46 @@ export default function CrearUsados() {
     }
 
     const validFiles: FilePreview[] = [];
-
     files.forEach((file) => {
-      const error = validateFile(file, "image");
-      if (error) {
+      if (file.size > 20 * 1024 * 1024) {
         setErrors((prev) => ({
           ...prev,
-          imagenes: error,
+          imagenes: "Las imágenes no pueden superar 20MB",
         }));
         return;
       }
-
-      validFiles.push({
-        file,
-        url: URL.createObjectURL(file),
-        type: "image",
-      });
+      validFiles.push({ file, url: URL.createObjectURL(file), type: "image" });
     });
 
     setImageFiles((prev) => [...prev, ...validFiles]);
 
-    // Limpiar error si había
     if (errors.imagenes) {
-      setErrors((prev) => ({
-        ...prev,
-        imagenes: "",
-      }));
+      setErrors((prev) => ({ ...prev, imagenes: "" }));
     }
   };
 
-  // Manejar subida de videos
-  const handleVideoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(event.target.files || []);
-
+  const handleVideoFilesSelected = (files: File[]) => {
     if (videoFiles.length + files.length > 5) {
-      setErrors((prev) => ({
-        ...prev,
-        videos: "Máximo 5 videos permitidos",
-      }));
+      setErrors((prev) => ({ ...prev, videos: "Máximo 5 videos permitidos" }));
       return;
     }
 
     const validFiles: FilePreview[] = [];
-
     files.forEach((file) => {
-      const error = validateFile(file, "video");
-      if (error) {
+      if (file.size > 50 * 1024 * 1024) {
         setErrors((prev) => ({
           ...prev,
-          videos: error,
+          videos: "Los videos no pueden superar 50MB",
         }));
         return;
       }
-
-      validFiles.push({
-        file,
-        url: URL.createObjectURL(file),
-        type: "video",
-      });
+      validFiles.push({ file, url: URL.createObjectURL(file), type: "video" });
     });
 
     setVideoFiles((prev) => [...prev, ...validFiles]);
 
-    // Limpiar error si había
     if (errors.videos) {
-      setErrors((prev) => ({
-        ...prev,
-        videos: "",
-      }));
+      setErrors((prev) => ({ ...prev, videos: "" }));
     }
   };
 
@@ -290,6 +297,20 @@ export default function CrearUsados() {
       URL.revokeObjectURL(newFiles[index].url);
       newFiles.splice(index, 1);
       setVideoFiles(newFiles);
+    }
+  };
+
+  const handleSlotSelected = (
+    slot: "fotoSinFondo1" | "fotoSinFondo2",
+    file: File,
+  ) => {
+    const url = URL.createObjectURL(file);
+    if (slot === "fotoSinFondo1") {
+      setFotoSinFondo1(file);
+      setFotoSinFondo1Preview(url);
+    } else {
+      setFotoSinFondo2(file);
+      setFotoSinFondo2Preview(url);
     }
   };
 
@@ -372,14 +393,16 @@ export default function CrearUsados() {
       imageFiles.forEach((file) => URL.revokeObjectURL(file.url));
       videoFiles.forEach((file) => URL.revokeObjectURL(file.url));
 
+      clearDraft();
+
       // Redirigir al dashboard con mensaje de éxito
       router.push("/admin/usados?created=true");
     } catch (error: unknown) {
       const err = error as {
         response?: { data?: { message?: string | string[]; error?: string } };
       };
-      console.error("❌ Error creando vehículo usado:", error);
-      console.error("📋 Respuesta del servidor:", err.response?.data);
+      console.error("Error creando vehículo usado:", error);
+      console.error("Respuesta del servidor:", err.response?.data);
 
       // Limpiar errores anteriores
       const fieldErrors: FormErrors = {};
@@ -389,9 +412,6 @@ export default function CrearUsados() {
         const messages = err.response.data.message;
 
         if (Array.isArray(messages)) {
-          // Parsear errores de validación y asignarlos a campos específicos
-          console.error("🔍 Errores de validación:", messages);
-
           const generalErrors: string[] = [];
 
           messages.forEach((msg: string) => {
@@ -402,7 +422,6 @@ export default function CrearUsados() {
               const fieldName = fieldMatch[1];
               const errorMsg = fieldMatch[2];
 
-              // Traducir algunos mensajes comunes
               let translatedMsg = errorMsg;
               if (errorMsg.includes("should not be empty"))
                 translatedMsg = "Este campo es requerido";
@@ -419,12 +438,10 @@ export default function CrearUsados() {
             }
           });
 
-          // Si hay errores generales, mostrarlos también
           if (generalErrors.length > 0) {
             fieldErrors.submit = generalErrors.join("\n• ");
           }
 
-          // Si solo hay errores de campo, mostrar mensaje general
           if (
             Object.keys(fieldErrors).length > 0 &&
             generalErrors.length === 0
@@ -433,7 +450,6 @@ export default function CrearUsados() {
               "Por favor, corrige los errores en el formulario";
           }
         } else {
-          // Error simple
           fieldErrors.submit = messages;
         }
       } else if (err.response?.data?.error) {
@@ -445,89 +461,74 @@ export default function CrearUsados() {
       }
 
       setErrors(fieldErrors);
+      showToast({
+        title: "No se pudo crear el vehículo usado",
+        message: mapApiError(error),
+        variant: "danger",
+      });
     } finally {
       setLoading(false);
     }
   };
 
+  const imagePreviews: MediaPreview[] = imageFiles.map((f, idx) => ({
+    id: String(idx),
+    url: f.url,
+    type: "image",
+  }));
+
+  const videoPreviews: MediaPreview[] = videoFiles.map((f, idx) => ({
+    id: String(idx),
+    url: f.url,
+    type: "video",
+  }));
+
   return (
-    <div className="p-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-center gap-4">
-        <Link
-          href="/admin/usados"
-          className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-        >
-          <ArrowLeft className="h-5 w-5 text-gray-600" />
-        </Link>
-        <div className="flex-1">
-          <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-3">
-            <Car className="h-6 w-6 text-cyan-600" />
-            Crear Nuevo Vehículo Usado
-          </h1>
-          <p className="text-gray-600 mt-1">
-            Complete la información del vehículo usado y suba las
-            imágenes/videos
-          </p>
-        </div>
+    <div className="space-y-8">
+      <Breadcrumb
+        items={[
+          { label: "Usados", href: "/admin/usados" },
+          { label: "Crear vehículo usado" },
+        ]}
+      />
 
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() => setPreview(!preview)}
-            className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors flex items-center gap-2"
-          >
-            <Eye className="h-4 w-4" />
-            {preview ? "Editar" : "Vista Previa"}
-          </button>
-        </div>
-      </div>
+      {hasDraft ? (
+        <DraftBanner onRestore={restoreDraft} onDismiss={dismissDraft} />
+      ) : null}
 
-      {/* Errores globales */}
-      {errors.submit && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3">
-          <AlertCircle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
+      {errors.submit ? (
+        <div className="flex items-start gap-3 rounded-xl border border-red-100 bg-red-50 px-4 py-3">
+          <AlertCircle className="mt-0.5 size-5 shrink-0 text-red-600" strokeWidth={2} aria-hidden />
           <div>
-            <h4 className="text-red-800 font-medium">
-              Error al crear vehículo usado
+            <h4 className="text-[16px] font-semibold text-red-700">
+              No se pudo crear el vehículo usado
             </h4>
-            <p className="text-red-700 text-sm mt-1">{errors.submit}</p>
+            <p className="whitespace-pre-line text-[15.5px] text-red-600">{errors.submit}</p>
           </div>
         </div>
-      )}
+      ) : null}
 
-      {/* Formulario de Edición */}
-      <form onSubmit={handleSubmit} className="space-y-8">
-        {/* Información Básica */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold text-gray-800 mb-6 flex items-center gap-2">
-            <Car className="h-5 w-5 text-cyan-600" />
-            Información Básica del Vehículo
-          </h2>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {/* Título */}
-            <div className="lg:col-span-3">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Título del Vehículo
-              </label>
-              <input
-                type="text"
+      <form onSubmit={handleSubmit}>
+        <FormShell
+          title="Crear vehículo usado"
+          description="Completá la información del vehículo. Los campos con * son obligatorios."
+        >
+          <FormSection title="Información básica del vehículo" index={1}>
+            <Field
+              label="Título del vehículo"
+              htmlFor="titulo"
+              hint="Se genera automáticamente si se deja vacío"
+              className="md:col-span-2"
+            >
+              <TextInput
+                id="titulo"
                 value={formData.titulo}
                 onChange={(e) => handleInputChange("titulo", e.target.value)}
                 placeholder="Ej: Toyota Hilux 2020 SRV"
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
               />
-              <p className="text-xs text-gray-500 mt-1">
-                Se genera automáticamente si se deja vacío
-              </p>
-            </div>
+            </Field>
 
-            {/* Marca */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Marca <span className="text-red-500">*</span>
-              </label>
+            <AutocompleteFieldShell label="Marca" htmlFor="marca" required error={errors.marca}>
               <DynamicUsadosAutocomplete
                 id="marca"
                 name="marca"
@@ -535,22 +536,13 @@ export default function CrearUsados() {
                 onChange={(value) => handleInputChange("marca", value)}
                 field="marcas"
                 placeholder="Escribir o seleccionar marca..."
-                isAdmin={true}
-                allowCustom={true}
-                className={`px-4 py-3 ${
-                  errors.marca ? "border-red-300 bg-red-50" : "border-gray-300"
-                }`}
+                isAdmin
+                allowCustom
+                className={`${AUTOCOMPLETE_CLASSNAME} ${errors.marca ? "border-red-500" : ""}`}
               />
-              {errors.marca && (
-                <p className="text-red-600 text-sm mt-1">{errors.marca}</p>
-              )}
-            </div>
+            </AutocompleteFieldShell>
 
-            {/* Modelo */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Modelo <span className="text-red-500">*</span>
-              </label>
+            <AutocompleteFieldShell label="Modelo" htmlFor="modelo" required error={errors.modelo}>
               <DynamicUsadosModeloAutocomplete
                 id="modelo"
                 name="modelo"
@@ -558,22 +550,13 @@ export default function CrearUsados() {
                 onChange={(value) => handleInputChange("modelo", value)}
                 marca={formData.marca}
                 placeholder="Escribir o seleccionar modelo..."
-                isAdmin={true}
-                allowCustom={true}
-                className={`px-4 py-3 ${
-                  errors.modelo ? "border-red-300 bg-red-50" : "border-gray-300"
-                }`}
+                isAdmin
+                allowCustom
+                className={`${AUTOCOMPLETE_CLASSNAME} ${errors.modelo ? "border-red-500" : ""}`}
               />
-              {errors.modelo && (
-                <p className="text-red-600 text-sm mt-1">{errors.modelo}</p>
-              )}
-            </div>
+            </AutocompleteFieldShell>
 
-            {/* Tipo de Vehículo */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Tipo de Vehículo
-              </label>
+            <AutocompleteFieldShell label="Tipo de vehículo" htmlFor="tipoVehiculo">
               <DynamicUsadosAutocomplete
                 id="tipoVehiculo"
                 name="tipoVehiculo"
@@ -581,66 +564,43 @@ export default function CrearUsados() {
                 onChange={(value) => handleInputChange("tipoVehiculo", value)}
                 field="tiposVehiculo"
                 placeholder="Escribir o seleccionar tipo..."
-                isAdmin={true}
-                allowCustom={true}
-                className="px-4 py-3"
+                isAdmin
+                allowCustom
+                className={AUTOCOMPLETE_CLASSNAME}
               />
-            </div>
+            </AutocompleteFieldShell>
 
-            {/* Año */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Año del Modelo <span className="text-red-500">*</span>
-              </label>
-              <input
+            <Field label="Año del modelo" htmlFor="anio" required error={errors.anio}>
+              <TextInput
+                id="anio"
                 type="number"
                 value={formData.anio}
                 onChange={(e) => handleInputChange("anio", e.target.value)}
                 placeholder={new Date().getFullYear().toString()}
                 min="1990"
                 max={new Date().getFullYear() + 1}
-                required
-                className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 ${
-                  errors.anio ? "border-red-300 bg-red-50" : "border-gray-300"
-                }`}
+                invalid={Boolean(errors.anio)}
               />
-              {errors.anio && (
-                <p className="text-red-600 text-sm mt-1">{errors.anio}</p>
-              )}
-            </div>
+            </Field>
 
-            {/* Kilometraje */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Kilometraje (km) <span className="text-red-500">*</span>
-              </label>
-              <input
+            <Field
+              label="Kilometraje (km)"
+              htmlFor="kilometraje"
+              required
+              error={errors.kilometraje}
+            >
+              <TextInput
+                id="kilometraje"
                 type="number"
                 value={formData.kilometraje}
-                onChange={(e) =>
-                  handleInputChange("kilometraje", e.target.value)
-                }
+                onChange={(e) => handleInputChange("kilometraje", e.target.value)}
                 placeholder="Ej: 45000"
                 min="0"
-                required
-                className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 ${
-                  errors.kilometraje
-                    ? "border-red-300 bg-red-50"
-                    : "border-gray-300"
-                }`}
+                invalid={Boolean(errors.kilometraje)}
               />
-              {errors.kilometraje && (
-                <p className="text-red-600 text-sm mt-1">
-                  {errors.kilometraje}
-                </p>
-              )}
-            </div>
+            </Field>
 
-            {/* Versión */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Versión
-              </label>
+            <AutocompleteFieldShell label="Versión" htmlFor="version">
               <DynamicUsadosAutocomplete
                 id="version"
                 name="version"
@@ -648,61 +608,38 @@ export default function CrearUsados() {
                 onChange={(value) => handleInputChange("version", value)}
                 field="versiones"
                 placeholder="Ej: XLT, SRV, Limited..."
-                isAdmin={true}
-                allowCustom={true}
-                className="px-4 py-3"
+                isAdmin
+                allowCustom
+                className={AUTOCOMPLETE_CLASSNAME}
               />
-            </div>
-          </div>
-        </div>
+            </AutocompleteFieldShell>
+          </FormSection>
 
-        {/* Especificaciones Técnicas */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold text-gray-800 mb-6 flex items-center gap-2">
-            <Settings className="h-5 w-5 text-cyan-600" />
-            Especificaciones Técnicas
-          </h2>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {/* Tipo de Combustible */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Tipo de Combustible
-              </label>
+          <FormSection title="Especificaciones técnicas" index={2}>
+            <AutocompleteFieldShell label="Tipo de combustible" htmlFor="tipoCombustible">
               <DynamicUsadosAutocomplete
                 id="tipoCombustible"
                 name="tipoCombustible"
                 value={formData.tipoCombustible}
-                onChange={(value) =>
-                  handleInputChange("tipoCombustible", value)
-                }
+                onChange={(value) => handleInputChange("tipoCombustible", value)}
                 field="combustibles"
                 placeholder="Escribir o seleccionar..."
-                isAdmin={true}
-                allowCustom={true}
-                className="px-4 py-3"
+                isAdmin
+                allowCustom
+                className={AUTOCOMPLETE_CLASSNAME}
               />
-            </div>
+            </AutocompleteFieldShell>
 
-            {/* Motor */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Motor
-              </label>
-              <input
-                type="text"
+            <Field label="Motor" htmlFor="motor">
+              <TextInput
+                id="motor"
                 value={formData.motor}
                 onChange={(e) => handleInputChange("motor", e.target.value)}
                 placeholder="Ej: 2.8L Turbo"
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
               />
-            </div>
+            </Field>
 
-            {/* Transmisión */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Transmisión
-              </label>
+            <AutocompleteFieldShell label="Transmisión" htmlFor="transmision">
               <DynamicUsadosAutocomplete
                 id="transmision"
                 name="transmision"
@@ -710,17 +647,13 @@ export default function CrearUsados() {
                 onChange={(value) => handleInputChange("transmision", value)}
                 field="transmisiones"
                 placeholder="Escribir o seleccionar..."
-                isAdmin={true}
-                allowCustom={true}
-                className="px-4 py-3"
+                isAdmin
+                allowCustom
+                className={AUTOCOMPLETE_CLASSNAME}
               />
-            </div>
+            </AutocompleteFieldShell>
 
-            {/* Tracción */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Tracción
-              </label>
+            <AutocompleteFieldShell label="Tracción" htmlFor="traccion">
               <DynamicUsadosAutocomplete
                 id="traccion"
                 name="traccion"
@@ -728,157 +661,88 @@ export default function CrearUsados() {
                 onChange={(value) => handleInputChange("traccion", value)}
                 field="tracciones"
                 placeholder="Escribir o seleccionar..."
-                isAdmin={true}
-                allowCustom={true}
-                className="px-4 py-3"
+                isAdmin
+                allowCustom
+                className={AUTOCOMPLETE_CLASSNAME}
               />
-            </div>
+            </AutocompleteFieldShell>
 
-            {/* Potencia */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Potencia
-              </label>
-              <input
-                type="text"
+            <Field label="Potencia" htmlFor="potencia">
+              <TextInput
+                id="potencia"
                 value={formData.potencia}
                 onChange={(e) => handleInputChange("potencia", e.target.value)}
                 placeholder="Ej: 200 HP, 150 CV"
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
               />
-            </div>
+            </Field>
 
-            {/* Capacidad de Carga */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Capacidad de Carga
-              </label>
-              <input
-                type="text"
+            <Field label="Capacidad de carga" htmlFor="capacidadCarga">
+              <TextInput
+                id="capacidadCarga"
                 value={formData.capacidadCarga}
-                onChange={(e) =>
-                  handleInputChange("capacidadCarga", e.target.value)
-                }
+                onChange={(e) => handleInputChange("capacidadCarga", e.target.value)}
                 placeholder="Ej: 1000 kg"
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
               />
-            </div>
+            </Field>
 
-            {/* Sistema de Frenado */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Sistema de Frenado
-              </label>
-              <input
-                type="text"
+            <Field label="Sistema de frenado" htmlFor="sistemaFrenado">
+              <TextInput
+                id="sistemaFrenado"
                 value={formData.sistemaFrenado}
-                onChange={(e) =>
-                  handleInputChange("sistemaFrenado", e.target.value)
-                }
+                onChange={(e) => handleInputChange("sistemaFrenado", e.target.value)}
                 placeholder="Ej: ABS + EBD"
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
               />
-            </div>
+            </Field>
 
-            {/* Cilindrada */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Cilindrada
-              </label>
-              <input
-                type="text"
+            <Field label="Cilindrada" htmlFor="cilindrada">
+              <TextInput
+                id="cilindrada"
                 value={formData.cilindrada}
-                onChange={(e) =>
-                  handleInputChange("cilindrada", e.target.value)
-                }
+                onChange={(e) => handleInputChange("cilindrada", e.target.value)}
                 placeholder="Ej: 2.0L, 1800cc"
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
               />
-            </div>
+            </Field>
 
-            {/* Color */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Color
-              </label>
-              <input
-                type="text"
+            <Field label="Color" htmlFor="color">
+              <TextInput
+                id="color"
                 value={formData.color}
                 onChange={(e) => handleInputChange("color", e.target.value)}
                 placeholder="Ej: Blanco, Rojo"
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
               />
-            </div>
+            </Field>
 
-            {/* Cantidad de Puertas */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Cantidad de Puertas
-              </label>
-              <input
+            <Field label="Cantidad de puertas" htmlFor="cantidadPuertas">
+              <TextInput
+                id="cantidadPuertas"
                 type="number"
                 value={formData.cantidadPuertas}
-                onChange={(e) =>
-                  handleInputChange("cantidadPuertas", e.target.value)
-                }
+                onChange={(e) => handleInputChange("cantidadPuertas", e.target.value)}
                 placeholder="Ej: 4"
                 min="2"
                 max="5"
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
               />
-            </div>
+            </Field>
 
-            {/* Cantidad de Asientos */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Cantidad de Asientos
-              </label>
-              <input
+            <Field label="Cantidad de asientos" htmlFor="cantidadAsientos">
+              <TextInput
+                id="cantidadAsientos"
                 type="number"
                 value={formData.cantidadAsientos}
-                onChange={(e) =>
-                  handleInputChange("cantidadAsientos", e.target.value)
-                }
+                onChange={(e) => handleInputChange("cantidadAsientos", e.target.value)}
                 placeholder="Ej: 5"
                 min="2"
                 max="9"
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
               />
-            </div>
-          </div>
-        </div>
+            </Field>
+          </FormSection>
 
-        {/* Equipamiento */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold text-gray-800 mb-6">
-            Equipamiento
-          </h2>
-
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-              {[
-                "ABS",
-                "Airbags frontales",
-                "Airbags laterales",
-                "Aire acondicionado",
-                "Alarma",
-                "Bluetooth",
-                "Cámara de retroceso",
-                "Cierre centralizado",
-                "Control de crucero",
-                "Control de estabilidad",
-                "Control de tracción",
-                "Cristales eléctricos",
-                "Dirección asistida",
-                "Espejos eléctricos",
-                "Faros antiniebla",
-                "Llantas de aleación",
-                "Sensor de estacionamiento",
-                "Techo solar",
-              ].map((item) => (
+          <FormSection title="Equipamiento (opcional)" index={3}>
+            <div className="col-span-full grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {EQUIPAMIENTO_OPCIONES.map((item) => (
                 <label
                   key={item}
-                  className="flex items-center gap-2 p-2 hover:bg-gray-50 rounded cursor-pointer"
+                  className="flex items-center gap-3 rounded-lg border border-gray-200 bg-white px-4 py-3 transition-colors duration-150 hover:bg-gray-50"
                 >
                   <input
                     type="checkbox"
@@ -887,259 +751,153 @@ export default function CrearUsados() {
                       if (e.target.checked) {
                         setEquipamiento([...equipamiento, item]);
                       } else {
-                        setEquipamiento(
-                          equipamiento.filter((eq) => eq !== item)
-                        );
+                        setEquipamiento(equipamiento.filter((eq) => eq !== item));
                       }
                     }}
-                    className="w-4 h-4 text-cyan-600 border-gray-300 rounded focus:ring-cyan-500"
+                    className="size-5 shrink-0 accent-gray-900"
                   />
-                  <span className="text-sm text-gray-700">{item}</span>
+                  <span className="text-[16px] text-gray-900">{item}</span>
                 </label>
               ))}
             </div>
-          </div>
-        </div>
+          </FormSection>
 
-        {/* Multimedia */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold text-gray-800 mb-6 flex items-center gap-2">
-            <ImageIcon className="h-5 w-5 text-cyan-600" />
-            Imágenes y Videos
-          </h2>
-
-          {/* Imágenes */}
-          <div className="mb-8">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h3 className="text-sm font-medium text-gray-700">
-                  Imágenes del Vehículo
-                </h3>
-                <p className="text-xs text-gray-500 mt-1">
-                  Máximo 10 imágenes • Formatos: JPG, PNG, WEBP • Máx 20MB c/u
-                </p>
-              </div>
-              <label className="px-4 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 transition-colors cursor-pointer flex items-center gap-2">
-                <Upload className="h-4 w-4" />
-                Subir Imágenes
-                <input
-                  type="file"
-                  multiple
-                  accept="image/*"
-                  onChange={handleImageUpload}
-                  className="hidden"
-                />
-              </label>
+          <FormSection title="Imágenes y videos" index={4}>
+            <div className="col-span-full space-y-2">
+              <span className="text-[15.5px] font-semibold text-gray-800">
+                Imágenes del vehículo ({imageFiles.length}/10)
+              </span>
+              <MediaUploadZone
+                previews={imagePreviews}
+                onFilesSelected={handleImageFilesSelected}
+                onRemove={(id) => removeFile(Number(id), "image")}
+                max={10}
+                acceptedTypes={["image/jpeg", "image/png", "image/webp"]}
+                maxSizeMB={20}
+                instruccion="Arrastrá las fotos acá o hacé clic — JPG, PNG o WEBP, máximo 20 MB cada una"
+              />
+              {errors.imagenes ? (
+                <span className="flex items-start gap-1.5 text-[15px] font-medium text-red-600">
+                  <AlertCircle className="mt-0.5 size-4 shrink-0" strokeWidth={2} aria-hidden />
+                  {errors.imagenes}
+                </span>
+              ) : null}
             </div>
 
-            {errors.imagenes && (
-              <p className="text-red-600 text-sm mb-4">{errors.imagenes}</p>
-            )}
-
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
-              {imageFiles.map((file, index) => (
-                <div key={index} className="relative group">
-                  <Image
-                    src={file.url}
-                    alt={`Preview ${index + 1}`}
-                    width={300}
-                    height={128}
-                    className="w-full h-32 object-cover rounded-lg border border-gray-200"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => removeFile(index, "image")}
-                    className="absolute top-2 right-2 p-1 bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
-              ))}
+            <div className="col-span-full space-y-2">
+              <span className="text-[15.5px] font-semibold text-gray-800">
+                Videos del vehículo ({videoFiles.length}/5)
+              </span>
+              <MediaUploadZone
+                previews={videoPreviews}
+                onFilesSelected={handleVideoFilesSelected}
+                onRemove={(id) => removeFile(Number(id), "video")}
+                max={5}
+                acceptedTypes={["video/mp4", "video/quicktime", "video/x-msvideo", "video/webm"]}
+                maxSizeMB={50}
+                instruccion="Arrastrá los videos acá o hacé clic — MP4, MOV o AVI, máximo 50 MB cada uno"
+              />
+              {errors.videos ? (
+                <span className="flex items-start gap-1.5 text-[15px] font-medium text-red-600">
+                  <AlertCircle className="mt-0.5 size-4 shrink-0" strokeWidth={2} aria-hidden />
+                  {errors.videos}
+                </span>
+              ) : null}
             </div>
 
-            {imageFiles.length === 0 && (
-              <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
-                <ImageIcon className="h-12 w-12 text-gray-400 mx-auto mb-3" />
-                <p className="text-gray-600">No hay imágenes cargadas</p>
-              </div>
-            )}
-          </div>
-
-          {/* Videos */}
-          <div>
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h3 className="text-sm font-medium text-gray-700">
-                  Videos del Vehículo
-                </h3>
-                <p className="text-xs text-gray-500 mt-1">
-                  Máximo 5 videos • Formatos: MP4, MOV, AVI • Máx 50MB c/u
-                </p>
-              </div>
-              <label className="px-4 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 transition-colors cursor-pointer flex items-center gap-2">
-                <Upload className="h-4 w-4" />
-                Subir Videos
-                <input
-                  type="file"
-                  multiple
-                  accept="video/*"
-                  onChange={handleVideoUpload}
-                  className="hidden"
-                />
-              </label>
-            </div>
-
-            {errors.videos && (
-              <p className="text-red-600 text-sm mb-4">{errors.videos}</p>
-            )}
-
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-              {videoFiles.map((file, index) => (
-                <div key={index} className="relative group">
-                  <video
-                    src={file.url}
-                    className="w-full h-32 object-cover rounded-lg border border-gray-200"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => removeFile(index, "video")}
-                    className="absolute top-2 right-2 p-1 bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
-              ))}
-            </div>
-
-            {videoFiles.length === 0 && (
-              <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
-                <Video className="h-12 w-12 text-gray-400 mx-auto mb-3" />
-                <p className="text-gray-600">No hay videos cargados</p>
-              </div>
-            )}
-          </div>
-
-          {/* Fotos sin fondo para PDFs */}
-          <div className="mt-8 pt-8 border-t border-gray-200">
-            <h3 className="text-sm font-medium text-gray-700 mb-4">
-              Fotos sin Fondo (Para Ficha Técnica PDF)
-            </h3>
-            <p className="text-xs text-gray-500 mb-4">
-              Fotos del vehículo con fondo transparente (PNG) para generar PDFs
-              profesionales
-            </p>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Foto sin fondo 1 */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Foto sin Fondo #1
-                </label>
-                <div className="flex items-center gap-4">
-                  <label className="flex-1 px-4 py-3 border-2 border-dashed border-gray-300 rounded-lg hover:border-cyan-500 transition-colors cursor-pointer text-center">
-                    <Upload className="h-5 w-5 text-gray-400 mx-auto mb-2" />
-                    <span className="text-sm text-gray-600">
-                      {fotoSinFondo1 ? fotoSinFondo1.name : "Subir foto"}
-                    </span>
+            <div className="col-span-full space-y-3 border-t border-gray-100 pt-6">
+              <span className="text-[15.5px] font-semibold text-gray-800">
+                Fotos sin fondo (para ficha técnica PDF, opcional)
+              </span>
+              <p className="text-[14.5px] text-gray-500">
+                Subí imágenes con fondo transparente (PNG) para generar PDFs más
+                profesionales.
+              </p>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <span className="text-[15.5px] font-semibold text-gray-800">
+                    Foto 1 (portada PDF)
+                  </span>
+                  <label className="flex aspect-video cursor-pointer flex-col items-center justify-center gap-2 overflow-hidden rounded-2xl border-2 border-dashed border-gray-200 bg-gray-50/50 text-center transition-colors duration-150 hover:border-gray-400">
+                    {fotoSinFondo1Preview ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={fotoSinFondo1Preview} alt="" className="size-full object-contain" />
+                    ) : (
+                      <>
+                        <ImageIcon className="size-6 text-gray-400" strokeWidth={1.75} aria-hidden />
+                        <span className="px-3 text-[15px] text-gray-500">Clic para subir</span>
+                      </>
+                    )}
                     <input
                       type="file"
                       accept="image/png"
+                      className="hidden"
                       onChange={(e) => {
                         const file = e.target.files?.[0];
-                        if (file) setFotoSinFondo1(file);
+                        if (file) handleSlotSelected("fotoSinFondo1", file);
+                        e.target.value = "";
                       }}
-                      className="hidden"
                     />
                   </label>
-                  {fotoSinFondo1 && (
-                    <button
-                      type="button"
-                      onClick={() => setFotoSinFondo1(null)}
-                      className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
-                    >
-                      <X className="h-5 w-5" />
-                    </button>
-                  )}
                 </div>
-              </div>
 
-              {/* Foto sin fondo 2 */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Foto sin Fondo #2
-                </label>
-                <div className="flex items-center gap-4">
-                  <label className="flex-1 px-4 py-3 border-2 border-dashed border-gray-300 rounded-lg hover:border-cyan-500 transition-colors cursor-pointer text-center">
-                    <Upload className="h-5 w-5 text-gray-400 mx-auto mb-2" />
-                    <span className="text-sm text-gray-600">
-                      {fotoSinFondo2 ? fotoSinFondo2.name : "Subir foto"}
-                    </span>
+                <div className="space-y-1.5">
+                  <span className="text-[15.5px] font-semibold text-gray-800">
+                    Foto 2 (página 3 PDF)
+                  </span>
+                  <label className="flex aspect-video cursor-pointer flex-col items-center justify-center gap-2 overflow-hidden rounded-2xl border-2 border-dashed border-gray-200 bg-gray-50/50 text-center transition-colors duration-150 hover:border-gray-400">
+                    {fotoSinFondo2Preview ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={fotoSinFondo2Preview} alt="" className="size-full object-contain" />
+                    ) : (
+                      <>
+                        <ImageIcon className="size-6 text-gray-400" strokeWidth={1.75} aria-hidden />
+                        <span className="px-3 text-[15px] text-gray-500">Clic para subir</span>
+                      </>
+                    )}
                     <input
                       type="file"
                       accept="image/png"
+                      className="hidden"
                       onChange={(e) => {
                         const file = e.target.files?.[0];
-                        if (file) setFotoSinFondo2(file);
+                        if (file) handleSlotSelected("fotoSinFondo2", file);
+                        e.target.value = "";
                       }}
-                      className="hidden"
                     />
                   </label>
-                  {fotoSinFondo2 && (
-                    <button
-                      type="button"
-                      onClick={() => setFotoSinFondo2(null)}
-                      className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
-                    >
-                      <X className="h-5 w-5" />
-                    </button>
-                  )}
                 </div>
               </div>
             </div>
+          </FormSection>
+
+          <FormSection title="Descripción" index={5}>
+            <Field label="Descripción" htmlFor="descripcion" className="md:col-span-2">
+              <TextareaField
+                id="descripcion"
+                value={formData.descripcion}
+                onChange={(e) => handleInputChange("descripcion", e.target.value)}
+                placeholder="Describí las características y condiciones del vehículo usado..."
+                rows={6}
+              />
+            </Field>
+          </FormSection>
+
+          <div className="col-span-full flex justify-end gap-3 border-t border-gray-100 pt-6">
+            <AdminButton variant="secondary" href="/admin/usados">
+              Cancelar
+            </AdminButton>
+            <AdminButton
+              type="submit"
+              variant="primary"
+              icon={loading ? Loader2 : Save}
+              disabled={loading}
+              className={loading ? "[&_svg]:animate-spin" : undefined}
+            >
+              {loading ? "Creando vehículo usado..." : "Crear vehículo usado"}
+            </AdminButton>
           </div>
-        </div>
-
-        {/* Descripción */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold text-gray-800 mb-6">
-            Descripción
-          </h2>
-
-          <textarea
-            value={formData.descripcion}
-            onChange={(e) => handleInputChange("descripcion", e.target.value)}
-            placeholder="Describa las características y condiciones del vehículo usado..."
-            rows={6}
-            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
-          />
-        </div>
-
-        {/* Botones de acción */}
-        <div className="flex items-center justify-end gap-4">
-          <Link
-            href="/admin/usados"
-            className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-          >
-            Cancelar
-          </Link>
-          <button
-            type="submit"
-            disabled={loading}
-            className="px-6 py-3 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-          >
-            {loading ? (
-              <>
-                <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent" />
-                Creando...
-              </>
-            ) : (
-              <>
-                <Save className="h-5 w-5" />
-                Crear Vehículo Usado
-              </>
-            )}
-          </button>
-        </div>
+        </FormShell>
       </form>
     </div>
   );

@@ -14,10 +14,12 @@ import {
   X,
   Star,
   Trash2,
+  Loader2,
 } from "lucide-react";
 import Link from "next/link";
 import { novedadService } from "@/services";
 import { Novedad } from "@/types";
+import { AdminButton, Badge } from "@/components/admin/kit";
 
 interface EstadisticasNovedades {
   total: number;
@@ -119,7 +121,7 @@ export default function NovedadesDashboard() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-cyan-600"></div>
+        <Loader2 className="size-6 animate-spin text-gray-400" strokeWidth={2} aria-hidden />
       </div>
     );
   }
@@ -128,35 +130,34 @@ export default function NovedadesDashboard() {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
-          <AlertCircle className="h-16 w-16 text-red-500 mx-auto mb-4" />
-          <h2 className="text-xl font-semibold text-gray-800 mb-2">Error</h2>
-          <p className="text-gray-600 mb-4">{error}</p>
-          <button
-            onClick={cargarDatosIniciales}
-            className="px-4 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700"
-          >
+          <AlertCircle className="h-16 w-16 text-red-600 mx-auto mb-4" />
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">Error</h2>
+          <p className="text-[16px] text-gray-500 mb-4">{error}</p>
+          <AdminButton variant="primary" onClick={cargarDatosIniciales}>
             Reintentar
-          </button>
+          </AdminButton>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="space-y-6">
       {/* Mensaje de éxito */}
       {showSuccess && (
-        <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-start gap-3">
-          <CheckCircle className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
+        <div className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm flex items-start gap-3">
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
+            <CheckCircle className="size-5" strokeWidth={1.75} aria-hidden />
+          </span>
           <div className="flex-1">
-            <h4 className="text-green-800 font-medium">{successMessage}</h4>
-            <p className="text-green-700 text-sm mt-1">
+            <h4 className="text-[16px] font-medium text-gray-900">{successMessage}</h4>
+            <p className="text-[16px] text-gray-500 mt-1">
               Los cambios se han guardado correctamente en el sistema.
             </p>
           </div>
           <button
             onClick={() => setShowSuccess(false)}
-            className="text-green-600 hover:text-green-800 p-1"
+            className="text-gray-400 hover:text-gray-900 transition-colors duration-150 p-1"
           >
             <X className="h-4 w-4" />
           </button>
@@ -164,149 +165,143 @@ export default function NovedadesDashboard() {
       )}
 
       {/* Header */}
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-800 flex items-center gap-3">
-            <Newspaper className="h-8 w-8 text-cyan-600" />
-            Gestión de Novedades
-          </h1>
-          <p className="text-gray-600 mt-1">
-            Administra noticias, eventos y actualizaciones de Guzman Motors
-          </p>
-        </div>
+      <div>
+        <div className="flex items-end justify-between gap-6">
+          <div>
+            <h1 className="text-[26px] font-semibold tracking-[-0.01em] text-gray-900">
+              Gestión de Novedades
+            </h1>
+            <p className="mt-1.5 text-[16px] text-gray-500">
+              Administra noticias, eventos y actualizaciones de Guzman Motors
+            </p>
+          </div>
 
-        <div className="flex flex-col sm:flex-row gap-3">
-          <Link
-            href="/admin/novedades/lista"
-            className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2"
-          >
-            <Eye className="h-4 w-4" />
-            Ver Todas
-          </Link>
-          {estadisticas.eliminadas > 0 && (
-            <Link
-              href="/admin/novedades/eliminadas"
-              className="px-4 py-2 bg-red-50 border border-red-300 text-red-700 rounded-lg hover:bg-red-100 transition-colors flex items-center gap-2"
-            >
-              <Trash2 className="h-4 w-4" />
-              Eliminadas ({estadisticas.eliminadas})
-            </Link>
-          )}
-          <Link
-            href="/admin/novedades/crear"
-            className="px-4 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 transition-colors flex items-center gap-2"
-          >
-            <Plus className="h-4 w-4" />
-            Nueva Novedad
-          </Link>
+          <div className="flex flex-col sm:flex-row gap-3">
+            <AdminButton variant="secondary" icon={Eye} href="/admin/novedades/lista">
+              Ver Todas
+            </AdminButton>
+            {estadisticas.eliminadas > 0 && (
+              <AdminButton
+                variant="danger"
+                icon={Trash2}
+                href="/admin/novedades/eliminadas"
+                className="border border-red-100 bg-red-50 text-red-600 hover:bg-red-100"
+              >
+                Eliminadas ({estadisticas.eliminadas})
+              </AdminButton>
+            )}
+            <AdminButton variant="primary" icon={Plus} href="/admin/novedades/crear">
+              Nueva Novedad
+            </AdminButton>
+          </div>
         </div>
       </div>
 
       {/* Tarjetas de Estadísticas */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
         {/* Total de Novedades */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">
+              <p className="text-[14px] text-gray-500">
                 Total Novedades
               </p>
-              <p className="text-2xl font-bold text-gray-800">
+              <p className="mt-3 text-[28px] font-semibold leading-none tracking-tight text-gray-900">
                 {estadisticas.total}
               </p>
             </div>
-            <div className="h-12 w-12 bg-blue-100 rounded-lg flex items-center justify-center">
-              <Newspaper className="h-6 w-6 text-blue-600" />
+            <div className="flex size-10 items-center justify-center rounded-lg bg-violet-50 text-violet-600">
+              <Newspaper className="size-5" strokeWidth={1.75} />
             </div>
           </div>
-          <div className="mt-4 flex items-center text-sm">
-            <TrendingUp className="h-4 w-4 text-green-500 mr-1" />
-            <span className="text-green-600 font-medium">Activas</span>
+          <div className="mt-4 flex items-center text-[15px]">
+            <TrendingUp className="h-4 w-4 text-emerald-600 mr-1" />
+            <span className="text-emerald-600 font-medium">Activas</span>
           </div>
         </div>
 
         {/* Destacadas */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Destacadas</p>
-              <p className="text-2xl font-bold text-yellow-600">
+              <p className="text-[14px] text-gray-500">Destacadas</p>
+              <p className="mt-3 text-[28px] font-semibold leading-none tracking-tight text-gray-900">
                 {estadisticas.destacadas}
               </p>
             </div>
-            <div className="h-12 w-12 bg-yellow-100 rounded-lg flex items-center justify-center">
-              <Star className="h-6 w-6 text-yellow-600" />
+            <div className="flex size-10 items-center justify-center rounded-lg bg-amber-50 text-amber-600">
+              <Star className="size-5" strokeWidth={1.75} />
             </div>
           </div>
-          <div className="mt-4 flex items-center text-sm">
-            <span className="text-gray-600">En portada</span>
+          <div className="mt-4 flex items-center text-[15px]">
+            <span className="text-gray-500">En portada</span>
           </div>
         </div>
 
         {/* Publicadas este mes */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Este Mes</p>
-              <p className="text-2xl font-bold text-purple-600">
+              <p className="text-[14px] text-gray-500">Este Mes</p>
+              <p className="mt-3 text-[28px] font-semibold leading-none tracking-tight text-gray-900">
                 {estadisticas.publicadasEsteMes}
               </p>
             </div>
-            <div className="h-12 w-12 bg-purple-100 rounded-lg flex items-center justify-center">
-              <Calendar className="h-6 w-6 text-purple-600" />
+            <div className="flex size-10 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600">
+              <Calendar className="size-5" strokeWidth={1.75} />
             </div>
           </div>
-          <div className="mt-4 flex items-center text-sm">
-            <span className="text-gray-600">Publicadas</span>
+          <div className="mt-4 flex items-center text-[15px]">
+            <span className="text-gray-500">Publicadas</span>
           </div>
         </div>
 
         {/* Total de Vistas */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Vistas</p>
-              <p className="text-2xl font-bold text-indigo-600">
+              <p className="text-[14px] text-gray-500">Vistas</p>
+              <p className="mt-3 text-[28px] font-semibold leading-none tracking-tight text-gray-900">
                 {estadisticas.vistasTotal.toLocaleString()}
               </p>
             </div>
-            <div className="h-12 w-12 bg-indigo-100 rounded-lg flex items-center justify-center">
-              <Eye className="h-6 w-6 text-indigo-600" />
+            <div className="flex size-10 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
+              <Eye className="size-5" strokeWidth={1.75} />
             </div>
           </div>
-          <div className="mt-4 flex items-center text-sm">
-            <span className="text-gray-600">Acumuladas</span>
+          <div className="mt-4 flex items-center text-[15px]">
+            <span className="text-gray-500">Acumuladas</span>
           </div>
         </div>
 
         {/* Eliminadas */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Eliminadas</p>
-              <p className="text-2xl font-bold text-red-600">
+              <p className="text-[14px] text-gray-500">Eliminadas</p>
+              <p className="mt-3 text-[28px] font-semibold leading-none tracking-tight text-gray-900">
                 {estadisticas.eliminadas}
               </p>
             </div>
-            <div className="h-12 w-12 bg-red-100 rounded-lg flex items-center justify-center">
-              <Trash2 className="h-6 w-6 text-red-600" />
+            <div className="flex size-10 items-center justify-center rounded-lg bg-red-50 text-red-600">
+              <Trash2 className="size-5" strokeWidth={1.75} />
             </div>
           </div>
-          <div className="mt-4 flex items-center text-sm">
-            <span className="text-gray-600">Ocultas</span>
+          <div className="mt-4 flex items-center text-[15px]">
+            <span className="text-gray-500">Ocultas</span>
           </div>
         </div>
       </div>
 
       {/* Novedades Recientes */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+      <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-semibold text-gray-800">
+          <h2 className="text-[16.5px] font-semibold text-gray-900">
             Novedades Recientes
           </h2>
           <Link
             href="/admin/novedades/lista"
-            className="text-cyan-600 hover:text-cyan-700 text-sm font-medium"
+            className="text-[14.5px] font-medium text-gray-500 transition-colors duration-150 hover:text-gray-900"
           >
             Ver todas →
           </Link>
@@ -315,23 +310,19 @@ export default function NovedadesDashboard() {
         {novedadesRecientes.length === 0 ? (
           <div className="text-center py-12">
             <Newspaper className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-            <p className="text-gray-500 mb-4">
+            <p className="text-[16px] text-gray-500 mb-4">
               No hay novedades publicadas aún
             </p>
-            <Link
-              href="/admin/novedades/crear"
-              className="inline-flex items-center gap-2 px-4 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700"
-            >
-              <Plus className="h-4 w-4" />
+            <AdminButton variant="primary" icon={Plus} href="/admin/novedades/crear">
               Crear Primera Novedad
-            </Link>
+            </AdminButton>
           </div>
         ) : (
           <div className="space-y-4">
             {novedadesRecientes.map((novedad) => (
               <div
                 key={novedad._id}
-                className="flex items-start gap-4 p-4 border border-gray-200 rounded-lg hover:border-cyan-300 hover:shadow-sm transition-all"
+                className="flex items-start gap-4 p-4 rounded-xl border border-gray-100 bg-white transition-colors duration-150 hover:bg-gray-50/70"
               >
                 {/* Imagen */}
                 <div className="flex-shrink-0">
@@ -344,11 +335,11 @@ export default function NovedadesDashboard() {
                       alt={novedad.titulo}
                       width={80}
                       height={80}
-                      className="w-20 h-20 object-cover rounded-lg"
+                      className="w-20 h-20 rounded-lg object-cover"
                     />
                   ) : (
-                    <div className="w-20 h-20 bg-gray-100 rounded-lg flex items-center justify-center">
-                      <Newspaper className="h-8 w-8 text-gray-400" />
+                    <div className="w-20 h-20 rounded-lg bg-gray-50 flex items-center justify-center">
+                      <Newspaper className="h-8 w-8 text-gray-300" />
                     </div>
                   )}
                 </div>
@@ -359,12 +350,12 @@ export default function NovedadesDashboard() {
                     <div className="flex-1">
                       <Link
                         href={`/admin/novedades/editar/${novedad._id}`}
-                        className="text-lg font-semibold text-gray-800 hover:text-cyan-600 line-clamp-1"
+                        className="text-lg font-semibold text-gray-900 transition-colors duration-150 hover:text-gray-600 line-clamp-1"
                       >
                         {novedad.titulo}
                       </Link>
                       {novedad.resumen && (
-                        <p className="text-sm text-gray-600 mt-1 line-clamp-2">
+                        <p className="text-[16px] text-gray-500 mt-1 line-clamp-2">
                           {novedad.resumen}
                         </p>
                       )}
@@ -373,22 +364,16 @@ export default function NovedadesDashboard() {
                     {/* Badges */}
                     <div className="flex gap-2 flex-shrink-0">
                       {novedad.destacada && (
-                        <span className="inline-flex items-center gap-1 px-2 py-1 bg-yellow-100 text-yellow-700 text-xs font-medium rounded">
-                          <Star className="h-3 w-3" />
-                          Destacada
-                        </span>
+                        <Badge variant="petrol">Destacada</Badge>
                       )}
                       {novedad.deleted && (
-                        <span className="inline-flex items-center gap-1 px-2 py-1 bg-red-100 text-red-700 text-xs font-medium rounded">
-                          <Trash2 className="h-3 w-3" />
-                          Eliminada
-                        </span>
+                        <Badge variant="danger">Eliminada</Badge>
                       )}
                     </div>
                   </div>
 
                   {/* Metadatos */}
-                  <div className="flex items-center gap-4 mt-2 text-sm text-gray-500">
+                  <div className="flex items-center gap-4 mt-2 text-[16px] text-gray-500">
                     {novedad.categoria && (
                       <span className="flex items-center gap-1">
                         <span className="font-medium">{novedad.categoria}</span>

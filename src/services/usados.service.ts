@@ -33,6 +33,98 @@ export interface UsadosResponse {
   pages: number;
 }
 
+// ========================================
+// FIX MISMATCH BACKEND↔FRONT (Sprint A5 · §7.1 del plan)
+// ========================================
+// El backend (Mongo) guarda variantes/transmisiones/tracciones/potenciaMaxima,
+// pero el front tipa version/transmision/traccion/potencia. Se normaliza EN
+// LOS BORDES de este service para no tocar el resto de la app.
+
+/**
+ * LECTURA: completa los campos que el front espera con su equivalente del
+ * backend cuando el propio campo del front viene vacío. Conserva el resto
+ * de las propiedades tal cual llegan.
+ */
+function normalizeUsado<T extends Usados>(raw: T): T {
+  if (!raw || typeof raw !== "object") return raw;
+  const anyRaw = raw as unknown as Record<string, unknown>;
+  return {
+    ...raw,
+    version: anyRaw.version ?? anyRaw.variantes,
+    transmision: anyRaw.transmision ?? anyRaw.transmisiones,
+    traccion: anyRaw.traccion ?? anyRaw.tracciones,
+    potencia: anyRaw.potencia ?? anyRaw.potenciaMaxima,
+  };
+}
+
+function normalizeUsadosResponse(response: UsadosResponse): UsadosResponse {
+  if (!response || !Array.isArray(response.items)) return response;
+  return { ...response, items: response.items.map((item) => normalizeUsado(item)) };
+}
+
+/**
+ * ESCRITURA: create-usado-with-media.dto.ts (backend) es estricto —
+ * ValidationPipe global usa whitelist+forbidNonWhitelisted, así que cualquier
+ * propiedad fuera de esta lista exacta hace fallar el request entero:
+ * titulo, tipos, variantes, marca, modelo, kilometraje, tipoCombustible,
+ * motor, anio, transmisiones, tracciones, potenciaMaxima, capacidadCarga,
+ * sistemaFrenado, ejes, estado, descripcion.
+ * El front (crear/editar) arma el FormData con nombres propios
+ * (version/transmision/traccion/potencia) y con campos que ese DTO no
+ * contempla (tipoVehiculo, color, cantidadPuertas, cantidadAsientos,
+ * cilindrada, equipamiento). Se renombran los primeros y se descartan los
+ * segundos ANTES de pegarle a la API. Los campos de archivos y los de
+ * borrado de media del endpoint de update (imagenesAEliminar, etc. — sí
+ * aceptados por UpdateUsadoDto) se dejan pasar sin tocar.
+ */
+const WRITE_FIELD_RENAME: Record<string, string> = {
+  version: "variantes",
+  transmision: "transmisiones",
+  traccion: "tracciones",
+  potencia: "potenciaMaxima",
+};
+
+const WRITE_FIELDS_ALLOWED = new Set([
+  // create-usado-with-media.dto.ts, EXACTO (grep del DTO del backend)
+  "titulo",
+  "tipos",
+  "variantes",
+  "marca",
+  "modelo",
+  "kilometraje",
+  "tipoCombustible",
+  "motor",
+  "anio",
+  "transmisiones",
+  "tracciones",
+  "potenciaMaxima",
+  "capacidadCarga",
+  "sistemaFrenado",
+  "ejes",
+  "estado",
+  "descripcion",
+  // archivos (Multer, fuera de la validación del DTO de texto)
+  "imagenes",
+  "videos",
+  "fotoSinFondo1",
+  "fotoSinFondo2",
+  // solo update-with-media: UpdateUsadoDto sí acepta estos campos de borrado
+  "imagenesAEliminar",
+  "videosAEliminar",
+  "eliminarFotoSinFondo1",
+  "eliminarFotoSinFondo2",
+]);
+
+function normalizeUsadoFormDataForWrite(input: FormData): FormData {
+  const output = new FormData();
+  input.forEach((value, key) => {
+    const outKey = WRITE_FIELD_RENAME[key] ?? key;
+    if (!WRITE_FIELDS_ALLOWED.has(outKey)) return;
+    output.append(outKey, value as string | Blob);
+  });
+  return output;
+}
+
 class UsadosService {
   private readonly baseURL = "/usados";
 
@@ -58,7 +150,7 @@ class UsadosService {
     const response = await apiClient.get(
       `${this.baseURL}/public?${queryParams.toString()}`
     );
-    return response.data;
+    return normalizeUsadosResponse(response.data);
   }
 
   /**
@@ -66,7 +158,7 @@ class UsadosService {
    */
   async getPublicUsadosById(id: string): Promise<Usados> {
     const response = await apiClient.get(`${this.baseURL}/public/${id}`);
-    return response.data;
+    return normalizeUsado(response.data);
   }
 
   /**
@@ -86,7 +178,7 @@ class UsadosService {
     const response = await apiClient.get(
       `${this.baseURL}/public/search?${queryParams.toString()}`
     );
-    return response.data;
+    return normalizeUsadosResponse(response.data);
   }
 
   /**
@@ -147,7 +239,7 @@ class UsadosService {
     const response = await apiClient.get(
       `${this.baseURL}?${queryParams.toString()}`
     );
-    return response.data;
+    return normalizeUsadosResponse(response.data);
   }
 
   /**
@@ -155,7 +247,7 @@ class UsadosService {
    */
   async searchAllUsados(searchDto: UsadosSearchDto): Promise<UsadosResponse> {
     const response = await apiClient.post(`${this.baseURL}/search`, searchDto);
-    return response.data;
+    return normalizeUsadosResponse(response.data);
   }
 
   /**
@@ -163,7 +255,7 @@ class UsadosService {
    */
   async getUsadosById(id: string): Promise<Usados> {
     const response = await apiClient.get(`${this.baseURL}/${id}`);
-    return response.data;
+    return normalizeUsado(response.data);
   }
 
   /**
@@ -176,14 +268,14 @@ class UsadosService {
   ): Promise<CreateUsadosResponse> {
     const response = await apiClient.post(
       `${this.baseURL}/create-with-media`,
-      formData,
+      normalizeUsadoFormDataForWrite(formData),
       {
         headers: {
           "Content-Type": "multipart/form-data",
         },
       }
     );
-    return response.data;
+    return { ...response.data, data: normalizeUsado(response.data?.data) };
   }
 
   /**
@@ -215,14 +307,14 @@ class UsadosService {
   ): Promise<UpdateUsadosResponse> {
     const response = await apiClient.patch(
       `${this.baseURL}/${id}/update-with-media`,
-      formData,
+      normalizeUsadoFormDataForWrite(formData),
       {
         headers: {
           "Content-Type": "multipart/form-data",
         },
       }
     );
-    return response.data;
+    return { ...response.data, usado: normalizeUsado(response.data?.usado) };
   }
 
   /**
@@ -241,6 +333,12 @@ class UsadosService {
   /**
    * Construir FormData desde UsadosFormData
    * Útil para preparar datos antes de crear/actualizar
+   *
+   * El resultado ya sale normalizado a los nombres que acepta el backend
+   * (version→variantes, transmision→transmisiones, traccion→tracciones,
+   * potencia→potenciaMaxima) y sin los campos que create-usado-with-media.dto.ts
+   * rechaza (tipoVehiculo, color, cantidadPuertas, cantidadAsientos, cilindrada,
+   * equipamiento) — ver normalizeUsadoFormDataForWrite.
    */
   buildFormData(
     data: Partial<UsadosFormData>,
@@ -295,7 +393,7 @@ class UsadosService {
       formData.append("fotoSinFondo2", fotoSinFondo2);
     }
 
-    return formData;
+    return normalizeUsadoFormDataForWrite(formData);
   }
 
   /**

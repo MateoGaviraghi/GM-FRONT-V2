@@ -1,22 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
-  Truck,
-  ArrowLeft,
-  Upload,
-  X,
   Save,
-  AlertCircle,
-  CheckCircle,
-  Image as ImageIcon,
-  Play,
-  ChevronDown,
-  ChevronUp,
+  Loader2,
   Plus,
   Trash2,
+  Image as ImageIcon,
+  AlertCircle,
 } from "lucide-react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { remolqueService } from "@/services";
 import {
@@ -32,6 +24,24 @@ import {
   CATEGORIAS_REMOLQUE,
   TIPOS_CARROCERIA,
 } from "@/types";
+import {
+  AccordionSection,
+  AdminButton,
+  Breadcrumb,
+  DraftBanner,
+  Field,
+  FormSection,
+  FormShell,
+  mapApiError,
+  MediaUploadZone,
+  type MediaPreview,
+  SelectField,
+  TextareaField,
+  TextInput,
+  useFormDraft,
+  useToast,
+  useUnsavedGuard,
+} from "@/components/admin/kit";
 
 interface FormData {
   // OBLIGATORIOS
@@ -60,26 +70,39 @@ interface FilePreview {
   type: "image" | "video";
 }
 
+const INITIAL_FORM_DATA: FormData = {
+  titulo: "",
+  condicion: "0KM",
+  categoria: "",
+  marca: "",
+  modelo: "",
+  anio: new Date().getFullYear().toString(),
+  tipoCarroceria: "",
+  cantidadEjes: "",
+  capacidadCarga: "",
+  tara: "",
+  pbtc: "",
+  kilometraje: "",
+  estado: "Disponible",
+  garantia: "",
+  descripcion: "",
+};
+
+type DraftShape = {
+  formData: FormData;
+  chasis: ChasisRemolque;
+  dimensiones: DimensionesRemolque;
+  ejesSuspension: EjesSuspensionRemolque;
+  carroceria: CarroceriaRemolque;
+  equipamientoSerie: string[];
+  equipamientoOpcional: string[];
+};
+
 export default function CrearRemolque() {
   const router = useRouter();
+  const { showToast } = useToast();
 
-  const [formData, setFormData] = useState<FormData>({
-    titulo: "",
-    condicion: "0KM",
-    categoria: "",
-    marca: "",
-    modelo: "",
-    anio: new Date().getFullYear().toString(),
-    tipoCarroceria: "",
-    cantidadEjes: "",
-    capacidadCarga: "",
-    tara: "",
-    pbtc: "",
-    kilometraje: "",
-    estado: "Disponible",
-    garantia: "",
-    descripcion: "",
-  });
+  const [formData, setFormData] = useState<FormData>(INITIAL_FORM_DATA);
 
   // Especificaciones técnicas
   const [chasis, setChasis] = useState<ChasisRemolque>({});
@@ -102,20 +125,56 @@ export default function CrearRemolque() {
   const [videoFiles, setVideoFiles] = useState<FilePreview[]>([]);
   const [fotoSinFondo1, setFotoSinFondo1] = useState<File | null>(null);
   const [fotoSinFondo2, setFotoSinFondo2] = useState<File | null>(null);
+  const [fotoSinFondo1Preview, setFotoSinFondo1Preview] = useState<
+    string | null
+  >(null);
+  const [fotoSinFondo2Preview, setFotoSinFondo2Preview] = useState<
+    string | null
+  >(null);
 
   // UI
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
   const [loading, setLoading] = useState(false);
-  const [acordeonesAbiertos, setAcordeonesAbiertos] = useState({
-    chasis: false,
-    dimensiones: false,
-    ejesSuspension: false,
-    carroceria: false,
-  });
 
-  const toggleAcordeon = (key: keyof typeof acordeonesAbiertos) => {
-    setAcordeonesAbiertos((prev) => ({ ...prev, [key]: !prev[key] }));
-  };
+  // Borrador (elderly-first: nunca perder una carga a mitad de hacer)
+  const { hasDraft, restoreDraft, dismissDraft, clearDraft } =
+    useFormDraft<DraftShape>(
+      "remolque-crear",
+      {
+        formData,
+        chasis,
+        dimensiones,
+        ejesSuspension,
+        carroceria,
+        equipamientoSerie,
+        equipamientoOpcional,
+      },
+      (draft) => {
+        setFormData(draft.formData ?? INITIAL_FORM_DATA);
+        setChasis(draft.chasis ?? {});
+        setDimensiones(draft.dimensiones ?? {});
+        setEjesSuspension(draft.ejesSuspension ?? {});
+        setCarroceria(draft.carroceria ?? {});
+        setEquipamientoSerie(draft.equipamientoSerie ?? []);
+        setEquipamientoOpcional(draft.equipamientoOpcional ?? []);
+      },
+    );
+
+  const initialSnapshotRef = useRef(JSON.stringify(INITIAL_FORM_DATA));
+  const isDirty =
+    JSON.stringify(formData) !== initialSnapshotRef.current ||
+    Object.keys(chasis).length > 0 ||
+    Object.keys(dimensiones).length > 0 ||
+    Object.keys(ejesSuspension).length > 0 ||
+    Object.keys(carroceria).length > 0 ||
+    equipamientoSerie.length > 0 ||
+    equipamientoOpcional.length > 0 ||
+    imageFiles.length > 0 ||
+    videoFiles.length > 0 ||
+    Boolean(fotoSinFondo1) ||
+    Boolean(fotoSinFondo2);
+
+  useUnsavedGuard(isDirty);
 
   const handleInputChange = (field: keyof FormData, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -217,38 +276,22 @@ export default function CrearRemolque() {
       imageFiles.forEach((f) => URL.revokeObjectURL(f.url));
       videoFiles.forEach((f) => URL.revokeObjectURL(f.url));
 
+      clearDraft();
       router.push("/admin/remolques?created=true");
     } catch (error: unknown) {
       console.error("Error creando remolque:", error);
-      const axiosErr = error as {
-        response?: { data?: { message?: string; errors?: string[] } };
-      };
-
-      // Extraer mensaje de error específico del backend
-      let errorMessage =
-        "Error al crear el remolque. Por favor, inténtelo nuevamente.";
-
-      if (axiosErr?.response?.data) {
-        const errorData = axiosErr.response.data;
-        if (errorData.message) {
-          errorMessage = errorData.message;
-        }
-        if (errorData.errors && Array.isArray(errorData.errors)) {
-          errorMessage += "\n" + errorData.errors.join("\n");
-        }
-      }
-
-      setErrors({
-        submit: errorMessage,
+      showToast({
+        title: "No se pudo crear el remolque",
+        message: mapApiError(error),
+        variant: "danger",
       });
     } finally {
       setLoading(false);
     }
   };
 
-  // Manejo de archivos
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
+  // Manejo de archivos — adaptador mínimo: MediaUploadZone entrega File[] ya comprimidos.
+  const handleImageFilesSelected = (files: File[]) => {
     if (imageFiles.length + files.length > 10) {
       setErrors((prev) => ({
         ...prev,
@@ -272,8 +315,7 @@ export default function CrearRemolque() {
     setImageFiles((prev) => [...prev, ...validFiles]);
   };
 
-  const handleVideoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
+  const handleVideoFilesSelected = (files: File[]) => {
     if (videoFiles.length + files.length > 5) {
       setErrors((prev) => ({ ...prev, videos: "Máximo 5 videos permitidos" }));
       return;
@@ -308,6 +350,20 @@ export default function CrearRemolque() {
     }
   };
 
+  const handleSlotSelected = (
+    slot: "fotoSinFondo1" | "fotoSinFondo2",
+    file: File,
+  ) => {
+    const url = URL.createObjectURL(file);
+    if (slot === "fotoSinFondo1") {
+      setFotoSinFondo1(file);
+      setFotoSinFondo1Preview(url);
+    } else {
+      setFotoSinFondo2(file);
+      setFotoSinFondo2Preview(url);
+    }
+  };
+
   // Manejo de equipamiento
   const addEquipamientoSerie = () => {
     if (newEquipSerie.trim()) {
@@ -323,91 +379,73 @@ export default function CrearRemolque() {
     }
   };
 
+  const imagePreviews: MediaPreview[] = imageFiles.map((f, idx) => ({
+    id: String(idx),
+    url: f.url,
+    type: "image",
+  }));
+
+  const videoPreviews: MediaPreview[] = videoFiles.map((f, idx) => ({
+    id: String(idx),
+    url: f.url,
+    type: "video",
+  }));
+
   return (
-    <div className="p-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-center gap-4">
-        <Link
-          href="/dashboard/remolques"
-          className="p-2 hover:bg-gray-100 rounded-lg"
+    <div className="space-y-8">
+      <Breadcrumb
+        items={[
+          { label: "Remolques", href: "/admin/remolques" },
+          { label: "Crear remolque" },
+        ]}
+      />
+
+      {hasDraft ? (
+        <DraftBanner onRestore={restoreDraft} onDismiss={dismissDraft} />
+      ) : null}
+
+      <form onSubmit={handleSubmit}>
+        <FormShell
+          eyebrow="Remolques"
+          title="Crear remolque"
+          description="Completá la información del remolque. Los campos con * son obligatorios."
         >
-          <ArrowLeft className="h-5 w-5 text-gray-600" />
-        </Link>
-        <div>
-          <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-3">
-            <Truck className="h-6 w-6 text-cyan-600" />
-            Crear Nuevo Remolque
-          </h1>
-          <p className="text-gray-600 mt-1">
-            Complete la información del remolque
-          </p>
-        </div>
-      </div>
-
-      {errors.submit && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3">
-          <AlertCircle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
-          <div>
-            <h4 className="text-red-800 font-medium">Error</h4>
-            <p className="text-red-700 text-sm mt-1">{errors.submit}</p>
-          </div>
-        </div>
-      )}
-
-      <form onSubmit={handleSubmit} className="space-y-6">
-        {/* SECCIÓN 1: INFORMACIÓN PRINCIPAL */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold text-gray-800 mb-6">
-            Información Principal
-          </h2>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {/* Título */}
-            <div className="lg:col-span-3">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Título <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
+          <FormSection index={1} title="Información principal">
+            <Field
+              label="Título"
+              htmlFor="titulo"
+              required
+              error={errors.titulo}
+              className="md:col-span-2"
+            >
+              <TextInput
+                id="titulo"
                 value={formData.titulo}
                 onChange={(e) => handleInputChange("titulo", e.target.value)}
                 placeholder="Ej: ACOPLADO 4 EJES BARANDA VOLCABLE"
-                className={`w-full px-4 py-3 border rounded-lg ${
-                  errors.titulo ? "border-red-300 bg-red-50" : "border-gray-300"
-                }`}
+                invalid={Boolean(errors.titulo)}
               />
-              {errors.titulo && (
-                <p className="text-red-600 text-sm mt-1">{errors.titulo}</p>
-              )}
-            </div>
+            </Field>
 
-            {/* Condición */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Condición <span className="text-red-500">*</span>
-              </label>
-              <select
+            <Field label="Condición" htmlFor="condicion" required>
+              <SelectField
+                id="condicion"
                 value={formData.condicion}
                 onChange={(e) => handleInputChange("condicion", e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg"
               >
                 {CONDICIONES_REMOLQUE.map((c) => (
                   <option key={c} value={c}>
                     {c}
                   </option>
                 ))}
-              </select>
-            </div>
+              </SelectField>
+            </Field>
 
-            {/* Categoría */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Categoría
-              </label>
-              <select
+            <Field label="Categoría" htmlFor="categoria">
+              <SelectField
+                id="categoria"
                 value={formData.categoria}
                 onChange={(e) => handleInputChange("categoria", e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg"
               >
                 <option value="">Seleccionar...</option>
                 {CATEGORIAS_REMOLQUE.map((c) => (
@@ -415,63 +453,46 @@ export default function CrearRemolque() {
                     {c}
                   </option>
                 ))}
-              </select>
-            </div>
+              </SelectField>
+            </Field>
 
-            {/* Marca */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Marca
-              </label>
-              <input
-                type="text"
+            <Field label="Marca" htmlFor="marca">
+              <TextInput
+                id="marca"
                 value={formData.marca}
                 onChange={(e) => handleInputChange("marca", e.target.value)}
                 placeholder="Ej: LAMBERT"
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg"
               />
-            </div>
+            </Field>
 
-            {/* Modelo */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Modelo
-              </label>
-              <input
-                type="text"
+            <Field label="Modelo" htmlFor="modelo">
+              <TextInput
+                id="modelo"
                 value={formData.modelo}
                 onChange={(e) => handleInputChange("modelo", e.target.value)}
                 placeholder="Ej: A4BV"
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg"
               />
-            </div>
+            </Field>
 
-            {/* Año */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Año
-              </label>
-              <input
+            <Field label="Año" htmlFor="anio" error={errors.anio}>
+              <TextInput
+                id="anio"
                 type="number"
                 value={formData.anio}
                 onChange={(e) => handleInputChange("anio", e.target.value)}
                 min="1990"
                 max={new Date().getFullYear() + 1}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg"
+                invalid={Boolean(errors.anio)}
               />
-            </div>
+            </Field>
 
-            {/* Tipo Carrocería */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Tipo Carrocería
-              </label>
-              <select
+            <Field label="Tipo de carrocería" htmlFor="tipoCarroceria">
+              <SelectField
+                id="tipoCarroceria"
                 value={formData.tipoCarroceria}
                 onChange={(e) =>
                   handleInputChange("tipoCarroceria", e.target.value)
                 }
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg"
               >
                 <option value="">Seleccionar...</option>
                 {TIPOS_CARROCERIA.map((t) => (
@@ -479,15 +500,16 @@ export default function CrearRemolque() {
                     {t}
                   </option>
                 ))}
-              </select>
-            </div>
+              </SelectField>
+            </Field>
 
-            {/* Cantidad Ejes */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Cantidad de Ejes
-              </label>
-              <input
+            <Field
+              label="Cantidad de ejes"
+              htmlFor="cantidadEjes"
+              error={errors.cantidadEjes}
+            >
+              <TextInput
+                id="cantidadEjes"
                 type="number"
                 value={formData.cantidadEjes}
                 onChange={(e) =>
@@ -496,164 +518,113 @@ export default function CrearRemolque() {
                 min="1"
                 max="20"
                 placeholder="Ej: 4"
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg"
+                invalid={Boolean(errors.cantidadEjes)}
               />
-            </div>
+            </Field>
 
-            {/* Capacidad Carga */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Capacidad de Carga
-              </label>
-              <input
-                type="text"
+            <Field label="Capacidad de carga" htmlFor="capacidadCarga">
+              <TextInput
+                id="capacidadCarga"
                 value={formData.capacidadCarga}
                 onChange={(e) =>
                   handleInputChange("capacidadCarga", e.target.value)
                 }
                 placeholder="Ej: 18 pallets"
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg"
               />
-            </div>
+            </Field>
 
-            {/* Tara */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Tara (kg)
-              </label>
-              <input
+            <Field label="Tara (kg)" htmlFor="tara">
+              <TextInput
+                id="tara"
                 type="number"
                 value={formData.tara}
                 onChange={(e) => handleInputChange("tara", e.target.value)}
                 placeholder="Ej: 7700"
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg"
               />
-            </div>
+            </Field>
 
-            {/* PBTC */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                PBTC
-              </label>
-              <input
-                type="text"
+            <Field label="PBTC" htmlFor="pbtc">
+              <TextInput
+                id="pbtc"
                 value={formData.pbtc}
                 onChange={(e) => handleInputChange("pbtc", e.target.value)}
                 placeholder="Ej: 45 Tn (4x2) / 52,5 Tn (6x2)"
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg"
               />
-            </div>
+            </Field>
 
-            {/* Kilometraje (solo si es USADO) */}
-            {formData.condicion === "USADO" && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Kilometraje
-                </label>
-                <input
+            {formData.condicion === "USADO" ? (
+              <Field label="Kilometraje" htmlFor="kilometraje">
+                <TextInput
+                  id="kilometraje"
                   type="number"
                   value={formData.kilometraje}
                   onChange={(e) =>
                     handleInputChange("kilometraje", e.target.value)
                   }
                   placeholder="Ej: 15000"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg"
                 />
-              </div>
-            )}
+              </Field>
+            ) : null}
 
-            {/* Garantía */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Garantía
-              </label>
-              <input
-                type="text"
+            <Field label="Garantía" htmlFor="garantia">
+              <TextInput
+                id="garantia"
                 value={formData.garantia}
                 onChange={(e) => handleInputChange("garantia", e.target.value)}
                 placeholder="Ej: 12 meses"
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg"
               />
-            </div>
+            </Field>
 
-            {/* Estado */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Estado
-              </label>
-              <select
+            <Field label="Estado" htmlFor="estado">
+              <SelectField
+                id="estado"
                 value={formData.estado}
                 onChange={(e) =>
                   handleInputChange("estado", e.target.value as EstadoRemolque)
                 }
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg"
               >
-                <option value="Disponible">✅ Disponible</option>
-                <option value="Reservado">⏳ Reservado</option>
-              </select>
-            </div>
+                <option value="Disponible">Disponible</option>
+                <option value="Reservado">Reservado</option>
+              </SelectField>
+            </Field>
 
-            {/* Descripción */}
-            <div className="lg:col-span-3">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Descripción
-              </label>
-              <textarea
+            <Field
+              label="Descripción"
+              htmlFor="descripcion"
+              className="md:col-span-2"
+            >
+              <TextareaField
+                id="descripcion"
                 value={formData.descripcion}
                 onChange={(e) =>
                   handleInputChange("descripcion", e.target.value)
                 }
                 placeholder="Descripción general del remolque..."
                 rows={4}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg"
               />
-            </div>
-          </div>
-        </div>
+            </Field>
+          </FormSection>
 
-        {/* SECCIÓN 2: ESPECIFICACIONES TÉCNICAS (Acordeones) */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold text-gray-800 mb-4">
-            Especificaciones Técnicas (Opcional)
-          </h2>
-
-          {/* Acordeón Chasis */}
-          <div className="border border-gray-200 rounded-lg mb-4">
-            <button
-              type="button"
-              onClick={() => toggleAcordeon("chasis")}
-              className="w-full flex items-center justify-between p-4 hover:bg-gray-50"
-            >
-              <span className="font-medium">Chasis</span>
-              {acordeonesAbiertos.chasis ? (
-                <ChevronUp className="h-5 w-5" />
-              ) : (
-                <ChevronDown className="h-5 w-5" />
-              )}
-            </button>
-            {acordeonesAbiertos.chasis && (
-              <div className="p-4 border-t border-gray-200 grid grid-cols-1 md:grid-cols-2 gap-4">
-                <input
-                  type="text"
-                  placeholder="Tipo"
+          <FormSection index={2} title="Especificaciones técnicas (opcional)">
+            <AccordionSection title="Chasis" className="col-span-full">
+              <Field label="Tipo">
+                <TextInput
                   value={chasis.tipo || ""}
                   onChange={(e) =>
                     setChasis((prev) => ({ ...prev, tipo: e.target.value }))
                   }
-                  className="px-4 py-2 border border-gray-300 rounded-lg"
                 />
-                <input
-                  type="text"
-                  placeholder="Material"
+              </Field>
+              <Field label="Material">
+                <TextInput
                   value={chasis.material || ""}
                   onChange={(e) =>
                     setChasis((prev) => ({ ...prev, material: e.target.value }))
                   }
-                  className="px-4 py-2 border border-gray-300 rounded-lg"
                 />
-                <input
-                  type="text"
-                  placeholder="Piso Chapa Espesor"
+              </Field>
+              <Field label="Piso chapa espesor">
+                <TextInput
                   value={chasis.pisoChapaEspesor || ""}
                   onChange={(e) =>
                     setChasis((prev) => ({
@@ -661,11 +632,10 @@ export default function CrearRemolque() {
                       pisoChapaEspesor: e.target.value,
                     }))
                   }
-                  className="px-4 py-2 border border-gray-300 rounded-lg"
                 />
-                <input
-                  type="text"
-                  placeholder="Paragolpe"
+              </Field>
+              <Field label="Paragolpe">
+                <TextInput
                   value={chasis.paragolpe || ""}
                   onChange={(e) =>
                     setChasis((prev) => ({
@@ -673,31 +643,14 @@ export default function CrearRemolque() {
                       paragolpe: e.target.value,
                     }))
                   }
-                  className="px-4 py-2 border border-gray-300 rounded-lg"
                 />
-              </div>
-            )}
-          </div>
+              </Field>
+            </AccordionSection>
 
-          {/* Acordeón Dimensiones */}
-          <div className="border border-gray-200 rounded-lg mb-4">
-            <button
-              type="button"
-              onClick={() => toggleAcordeon("dimensiones")}
-              className="w-full flex items-center justify-between p-4 hover:bg-gray-50"
-            >
-              <span className="font-medium">Dimensiones</span>
-              {acordeonesAbiertos.dimensiones ? (
-                <ChevronUp className="h-5 w-5" />
-              ) : (
-                <ChevronDown className="h-5 w-5" />
-              )}
-            </button>
-            {acordeonesAbiertos.dimensiones && (
-              <div className="p-4 border-t border-gray-200 grid grid-cols-1 md:grid-cols-2 gap-4">
-                <input
+            <AccordionSection title="Dimensiones" className="col-span-full">
+              <Field label="Largo interior (mm)">
+                <TextInput
                   type="number"
-                  placeholder="Largo Interior (mm)"
                   value={dimensiones.largoInterior || ""}
                   onChange={(e) =>
                     setDimensiones((prev) => ({
@@ -705,11 +658,11 @@ export default function CrearRemolque() {
                       largoInterior: parseInt(e.target.value) || undefined,
                     }))
                   }
-                  className="px-4 py-2 border border-gray-300 rounded-lg"
                 />
-                <input
+              </Field>
+              <Field label="Ancho exterior (mm)">
+                <TextInput
                   type="number"
-                  placeholder="Ancho Exterior (mm)"
                   value={dimensiones.anchoExterior || ""}
                   onChange={(e) =>
                     setDimensiones((prev) => ({
@@ -717,11 +670,11 @@ export default function CrearRemolque() {
                       anchoExterior: parseInt(e.target.value) || undefined,
                     }))
                   }
-                  className="px-4 py-2 border border-gray-300 rounded-lg"
                 />
-                <input
+              </Field>
+              <Field label="Altura baranda (mm)">
+                <TextInput
                   type="number"
-                  placeholder="Altura Baranda (mm)"
                   value={dimensiones.alturaBaranda || ""}
                   onChange={(e) =>
                     setDimensiones((prev) => ({
@@ -729,31 +682,13 @@ export default function CrearRemolque() {
                       alturaBaranda: parseInt(e.target.value) || undefined,
                     }))
                   }
-                  className="px-4 py-2 border border-gray-300 rounded-lg"
                 />
-              </div>
-            )}
-          </div>
+              </Field>
+            </AccordionSection>
 
-          {/* Acordeón Ejes y Suspensión */}
-          <div className="border border-gray-200 rounded-lg mb-4">
-            <button
-              type="button"
-              onClick={() => toggleAcordeon("ejesSuspension")}
-              className="w-full flex items-center justify-between p-4 hover:bg-gray-50"
-            >
-              <span className="font-medium">Ejes y Suspensión</span>
-              {acordeonesAbiertos.ejesSuspension ? (
-                <ChevronUp className="h-5 w-5" />
-              ) : (
-                <ChevronDown className="h-5 w-5" />
-              )}
-            </button>
-            {acordeonesAbiertos.ejesSuspension && (
-              <div className="p-4 border-t border-gray-200 grid grid-cols-1 md:grid-cols-2 gap-4">
-                <input
-                  type="text"
-                  placeholder="Tipo de Ejes"
+            <AccordionSection title="Ejes y suspensión" className="col-span-full">
+              <Field label="Tipo de ejes">
+                <TextInput
                   value={ejesSuspension.tipoEjes || ""}
                   onChange={(e) =>
                     setEjesSuspension((prev) => ({
@@ -761,11 +696,10 @@ export default function CrearRemolque() {
                       tipoEjes: e.target.value,
                     }))
                   }
-                  className="px-4 py-2 border border-gray-300 rounded-lg"
                 />
-                <input
-                  type="text"
-                  placeholder="Llantas"
+              </Field>
+              <Field label="Llantas">
+                <TextInput
                   value={ejesSuspension.llantas || ""}
                   onChange={(e) =>
                     setEjesSuspension((prev) => ({
@@ -773,11 +707,10 @@ export default function CrearRemolque() {
                       llantas: e.target.value,
                     }))
                   }
-                  className="px-4 py-2 border border-gray-300 rounded-lg"
                 />
-                <input
-                  type="text"
-                  placeholder="Suspensión"
+              </Field>
+              <Field label="Suspensión">
+                <TextInput
                   value={ejesSuspension.suspension || ""}
                   onChange={(e) =>
                     setEjesSuspension((prev) => ({
@@ -785,11 +718,10 @@ export default function CrearRemolque() {
                       suspension: e.target.value,
                     }))
                   }
-                  className="px-4 py-2 border border-gray-300 rounded-lg"
                 />
-                <input
-                  type="text"
-                  placeholder="Frenos"
+              </Field>
+              <Field label="Frenos">
+                <TextInput
                   value={ejesSuspension.frenos || ""}
                   onChange={(e) =>
                     setEjesSuspension((prev) => ({
@@ -797,40 +729,21 @@ export default function CrearRemolque() {
                       frenos: e.target.value,
                     }))
                   }
-                  className="px-4 py-2 border border-gray-300 rounded-lg"
                 />
-              </div>
-            )}
-          </div>
+              </Field>
+            </AccordionSection>
 
-          {/* Acordeón Carrocería */}
-          <div className="border border-gray-200 rounded-lg">
-            <button
-              type="button"
-              onClick={() => toggleAcordeon("carroceria")}
-              className="w-full flex items-center justify-between p-4 hover:bg-gray-50"
-            >
-              <span className="font-medium">Carrocería</span>
-              {acordeonesAbiertos.carroceria ? (
-                <ChevronUp className="h-5 w-5" />
-              ) : (
-                <ChevronDown className="h-5 w-5" />
-              )}
-            </button>
-            {acordeonesAbiertos.carroceria && (
-              <div className="p-4 border-t border-gray-200 grid grid-cols-1 md:grid-cols-2 gap-4">
-                <input
-                  type="text"
-                  placeholder="Tipo"
+            <AccordionSection title="Carrocería" className="col-span-full">
+              <Field label="Tipo">
+                <TextInput
                   value={carroceria.tipo || ""}
                   onChange={(e) =>
                     setCarroceria((prev) => ({ ...prev, tipo: e.target.value }))
                   }
-                  className="px-4 py-2 border border-gray-300 rounded-lg"
                 />
-                <input
-                  type="text"
-                  placeholder="Material"
+              </Field>
+              <Field label="Material">
+                <TextInput
                   value={carroceria.material || ""}
                   onChange={(e) =>
                     setCarroceria((prev) => ({
@@ -838,11 +751,10 @@ export default function CrearRemolque() {
                       material: e.target.value,
                     }))
                   }
-                  className="px-4 py-2 border border-gray-300 rounded-lg"
                 />
-                <input
-                  type="text"
-                  placeholder="Pintura"
+              </Field>
+              <Field label="Pintura">
+                <TextInput
                   value={carroceria.pintura || ""}
                   onChange={(e) =>
                     setCarroceria((prev) => ({
@@ -850,11 +762,10 @@ export default function CrearRemolque() {
                       pintura: e.target.value,
                     }))
                   }
-                  className="px-4 py-2 border border-gray-300 rounded-lg"
                 />
-                <input
-                  type="text"
-                  placeholder="Tratamiento"
+              </Field>
+              <Field label="Tratamiento">
+                <TextInput
                   value={carroceria.tratamiento || ""}
                   onChange={(e) =>
                     setCarroceria((prev) => ({
@@ -862,366 +773,258 @@ export default function CrearRemolque() {
                       tratamiento: e.target.value,
                     }))
                   }
-                  className="px-4 py-2 border border-gray-300 rounded-lg"
                 />
-              </div>
-            )}
-          </div>
-        </div>
+              </Field>
+            </AccordionSection>
+          </FormSection>
 
-        {/* SECCIÓN 3: EQUIPAMIENTO */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold text-gray-800 mb-4">
-            Equipamiento (Opcional)
-          </h2>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Equipamiento de Serie */}
-            <div>
-              <h3 className="font-medium text-gray-700 mb-3">
-                Equipamiento de Serie
-              </h3>
-              <div className="flex gap-2 mb-3">
-                <input
-                  type="text"
+          <FormSection index={3} title="Equipamiento (opcional)">
+            <div className="space-y-3">
+              <span className="text-[15.5px] font-semibold text-gray-800">
+                Equipamiento de serie
+              </span>
+              <div className="flex gap-2">
+                <TextInput
                   value={newEquipSerie}
                   onChange={(e) => setNewEquipSerie(e.target.value)}
-                  onKeyPress={(e) =>
+                  onKeyDown={(e) =>
                     e.key === "Enter" &&
                     (e.preventDefault(), addEquipamientoSerie())
                   }
                   placeholder="Agregar item..."
-                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg"
+                  className="flex-1"
                 />
-                <button
-                  type="button"
+                <AdminButton
+                  variant="secondary"
+                  icon={Plus}
                   onClick={addEquipamientoSerie}
-                  className="px-4 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700"
                 >
-                  <Plus className="h-5 w-5" />
-                </button>
+                  Agregar
+                </AdminButton>
               </div>
               <ul className="space-y-2">
                 {equipamientoSerie.map((item, idx) => (
                   <li
                     key={idx}
-                    className="flex items-center justify-between p-2 bg-gray-50 rounded"
+                    className="flex items-center justify-between gap-3 rounded-lg border border-gray-100 bg-gray-50 px-4 py-2.5"
                   >
-                    <span className="text-sm">{item}</span>
-                    <button
-                      type="button"
+                    <span className="text-[16px] text-gray-900">{item}</span>
+                    <AdminButton
+                      variant="danger"
+                      icon={Trash2}
+                      className="h-10 border border-red-100 bg-red-50 px-4 text-[15px] text-red-600 hover:bg-red-100"
                       onClick={() =>
                         setEquipamientoSerie((prev) =>
                           prev.filter((_, i) => i !== idx),
                         )
                       }
-                      className="text-red-600 hover:text-red-700"
+                      ariaLabel={`Quitar ${item}`}
                     >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
+                      Quitar
+                    </AdminButton>
                   </li>
                 ))}
               </ul>
             </div>
 
-            {/* Equipamiento Opcional */}
-            <div>
-              <h3 className="font-medium text-gray-700 mb-3">
-                Equipamiento Opcional
-              </h3>
-              <div className="flex gap-2 mb-3">
-                <input
-                  type="text"
+            <div className="space-y-3">
+              <span className="text-[15.5px] font-semibold text-gray-800">
+                Equipamiento opcional
+              </span>
+              <div className="flex gap-2">
+                <TextInput
                   value={newEquipOpcional}
                   onChange={(e) => setNewEquipOpcional(e.target.value)}
-                  onKeyPress={(e) =>
+                  onKeyDown={(e) =>
                     e.key === "Enter" &&
                     (e.preventDefault(), addEquipamientoOpcional())
                   }
                   placeholder="Agregar item..."
-                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg"
+                  className="flex-1"
                 />
-                <button
-                  type="button"
+                <AdminButton
+                  variant="secondary"
+                  icon={Plus}
                   onClick={addEquipamientoOpcional}
-                  className="px-4 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700"
                 >
-                  <Plus className="h-5 w-5" />
-                </button>
+                  Agregar
+                </AdminButton>
               </div>
               <ul className="space-y-2">
                 {equipamientoOpcional.map((item, idx) => (
                   <li
                     key={idx}
-                    className="flex items-center justify-between p-2 bg-gray-50 rounded"
+                    className="flex items-center justify-between gap-3 rounded-lg border border-gray-100 bg-gray-50 px-4 py-2.5"
                   >
-                    <span className="text-sm">{item}</span>
-                    <button
-                      type="button"
+                    <span className="text-[16px] text-gray-900">{item}</span>
+                    <AdminButton
+                      variant="danger"
+                      icon={Trash2}
+                      className="h-10 border border-red-100 bg-red-50 px-4 text-[15px] text-red-600 hover:bg-red-100"
                       onClick={() =>
                         setEquipamientoOpcional((prev) =>
                           prev.filter((_, i) => i !== idx),
                         )
                       }
-                      className="text-red-600 hover:text-red-700"
+                      ariaLabel={`Quitar ${item}`}
                     >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
+                      Quitar
+                    </AdminButton>
                   </li>
                 ))}
               </ul>
             </div>
-          </div>
-        </div>
+          </FormSection>
 
-        {/* SECCIÓN 4: MULTIMEDIA */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold text-gray-800 mb-6">
-            Imágenes y Videos
-          </h2>
-
-          {/* Imágenes normales */}
-          <div className="mb-6">
-            <label className="block mb-3">
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="font-medium text-gray-700">
-                  📸 Imágenes Normales
-                </h3>
-                <span className="text-sm text-gray-500">
-                  ({imageFiles.length}/10 imágenes)
+          <FormSection index={4} title="Imágenes y videos">
+            <div className="col-span-full space-y-2">
+              <span className="text-[15.5px] font-semibold text-gray-800">
+                Imágenes normales ({imageFiles.length}/10)
+              </span>
+              <MediaUploadZone
+                previews={imagePreviews}
+                onFilesSelected={handleImageFilesSelected}
+                onRemove={(id) => removeFile(Number(id), "image")}
+                max={10}
+                acceptedTypes={["image/jpeg", "image/png", "image/webp"]}
+                maxSizeMB={20}
+                instruccion="Arrastrá las fotos acá o hacé clic — JPG, PNG o WEBP, máximo 20 MB cada una"
+              />
+              {errors.imagenes ? (
+                <span className="flex items-start gap-1.5 text-[15px] font-medium text-red-600">
+                  <AlertCircle className="mt-0.5 size-4 shrink-0" strokeWidth={2} aria-hidden />
+                  {errors.imagenes}
                 </span>
-              </div>
-              <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-cyan-500 hover:bg-cyan-50 transition-all cursor-pointer">
-                <Upload className="h-12 w-12 text-gray-400 mx-auto mb-3" />
-                <p className="text-sm font-medium text-gray-700 mb-1">
-                  Haz clic aquí para subir imágenes
-                </p>
-                <p className="text-xs text-gray-500">
-                  o arrastra y suelta las imágenes
-                </p>
-                <p className="text-xs text-gray-400 mt-2">
-                  PNG, JPG, WEBP - Máximo 10 imágenes (5MB cada una)
-                </p>
-                <input
-                  type="file"
-                  multiple
-                  accept="image/*"
-                  onChange={handleImageUpload}
-                  className="hidden"
-                />
-              </div>
-            </label>
-            {errors.imagenes && (
-              <p className="text-red-600 text-sm mt-2 flex items-center gap-1">
-                <AlertCircle className="h-4 w-4" />
-                {errors.imagenes}
-              </p>
-            )}
-            {imageFiles.length > 0 && (
-              <div className="grid grid-cols-4 gap-4 mt-4">
-                {imageFiles.map((f, idx) => (
-                  <div key={idx} className="relative">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={f.url}
-                      alt=""
-                      className="w-full h-24 object-cover rounded"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => removeFile(idx, "image")}
-                      className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+              ) : null}
+            </div>
 
-          {/* Videos */}
-          <div className="mb-6">
-            <label className="block">
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="font-medium text-gray-700">🎥 Videos</h3>
-                <span className="text-sm text-gray-500">
-                  ({videoFiles.length}/5 videos)
+            <div className="col-span-full space-y-2">
+              <span className="text-[15.5px] font-semibold text-gray-800">
+                Videos ({videoFiles.length}/5)
+              </span>
+              <MediaUploadZone
+                previews={videoPreviews}
+                onFilesSelected={handleVideoFilesSelected}
+                onRemove={(id) => removeFile(Number(id), "video")}
+                max={5}
+                acceptedTypes={[
+                  "video/mp4",
+                  "video/quicktime",
+                  "video/x-msvideo",
+                  "video/webm",
+                ]}
+                maxSizeMB={50}
+                instruccion="Arrastrá los videos acá o hacé clic — MP4, MOV o AVI, máximo 50 MB cada uno"
+              />
+              {errors.videos ? (
+                <span className="flex items-start gap-1.5 text-[15px] font-medium text-red-600">
+                  <AlertCircle className="mt-0.5 size-4 shrink-0" strokeWidth={2} aria-hidden />
+                  {errors.videos}
                 </span>
-              </div>
-              <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-cyan-500 hover:bg-cyan-50 transition-all cursor-pointer">
-                <Play className="h-12 w-12 text-gray-400 mx-auto mb-3" />
-                <p className="text-sm font-medium text-gray-700 mb-1">
-                  Haz clic aquí para subir videos
-                </p>
-                <p className="text-xs text-gray-500">
-                  o arrastra y suelta los videos
-                </p>
-                <p className="text-xs text-gray-400 mt-2">
-                  MP4, MOV, AVI - Máximo 5 videos (50MB cada uno)
-                </p>
-                <input
-                  type="file"
-                  multiple
-                  accept="video/*"
-                  onChange={handleVideoUpload}
-                  className="hidden"
-                />
-              </div>
-            </label>
-            {errors.videos && (
-              <p className="text-red-600 text-sm mt-2 flex items-center gap-1">
-                <AlertCircle className="h-4 w-4" />
-                {errors.videos}
+              ) : null}
+            </div>
+
+            <div className="col-span-full space-y-3 border-t border-gray-100 pt-6">
+              <span className="text-[15.5px] font-semibold text-gray-800">
+                Fotos sin fondo (para PDF, opcional)
+              </span>
+              <p className="text-[16px] text-gray-500">
+                Subí imágenes sin fondo para armar fichas técnicas más
+                profesionales.
               </p>
-            )}
-            {videoFiles.length > 0 && (
-              <div className="mt-4 space-y-2">
-                {videoFiles.map((v, idx) => (
-                  <div
-                    key={idx}
-                    className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
-                  >
-                    <div className="flex items-center gap-3">
-                      <Play className="h-5 w-5 text-gray-500" />
-                      <span className="text-sm font-medium text-gray-700">
-                        {v.file.name}
-                      </span>
-                      <span className="text-xs text-gray-500">
-                        ({(v.file.size / 1024 / 1024).toFixed(2)} MB)
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => removeFile(idx, "video")}
-                      className="text-red-600 hover:text-red-700 p-1"
-                    >
-                      <X className="h-5 w-5" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Fotos sin fondo para PDF */}
-          <div className="border-t pt-6">
-            <h3 className="font-medium text-gray-700 mb-3">
-              🎨 Fotos sin Fondo (Para PDF)
-            </h3>
-            <p className="text-sm text-gray-600 mb-4">
-              Opcional: Sube imágenes sin fondo para fichas técnicas
-              profesionales
-            </p>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="block">
-                  <div className="text-sm font-medium text-gray-700 mb-2">
-                    Foto 1 (Portada PDF)
-                  </div>
-                  <div className="border-2 border-dashed border-purple-300 rounded-lg p-6 text-center hover:border-purple-500 hover:bg-purple-50 transition-all cursor-pointer">
-                    {fotoSinFondo1 ? (
-                      <div>
-                        <CheckCircle className="h-10 w-10 text-green-500 mx-auto mb-2" />
-                        <p className="text-sm font-medium text-gray-700 mb-1">
-                          {fotoSinFondo1.name}
-                        </p>
-                        <p className="text-xs text-gray-500">
-                          Haz clic para cambiar
-                        </p>
-                      </div>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <span className="text-[15.5px] font-semibold text-gray-800">
+                    Foto 1 (portada PDF)
+                  </span>
+                  <label className="flex aspect-video cursor-pointer flex-col items-center justify-center gap-2 overflow-hidden rounded-2xl border-2 border-dashed border-gray-200 bg-gray-50/50 text-center transition-colors duration-150 hover:border-gray-400">
+                    {fotoSinFondo1Preview ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={fotoSinFondo1Preview}
+                        alt=""
+                        className="size-full object-contain"
+                      />
                     ) : (
-                      <div>
-                        <ImageIcon className="h-10 w-10 text-purple-400 mx-auto mb-2" />
-                        <p className="text-sm font-medium text-gray-700 mb-1">
-                          Subir foto sin fondo
-                        </p>
-                        <p className="text-xs text-gray-500">
-                          Para la portada del PDF
-                        </p>
-                      </div>
+                      <>
+                        <ImageIcon
+                          className="size-6 text-gray-400"
+                          strokeWidth={1.75}
+                          aria-hidden
+                        />
+                        <span className="px-3 text-[16px] text-gray-500">
+                          Clic para subir
+                        </span>
+                      </>
                     )}
                     <input
                       type="file"
                       accept="image/*"
-                      onChange={(e) =>
-                        setFotoSinFondo1(e.target.files?.[0] || null)
-                      }
                       className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) handleSlotSelected("fotoSinFondo1", file);
+                        e.target.value = "";
+                      }}
                     />
-                  </div>
-                </label>
-              </div>
+                  </label>
+                </div>
 
-              <div>
-                <label className="block">
-                  <div className="text-sm font-medium text-gray-700 mb-2">
-                    Foto 2 (Página 3 PDF)
-                  </div>
-                  <div className="border-2 border-dashed border-purple-300 rounded-lg p-6 text-center hover:border-purple-500 hover:bg-purple-50 transition-all cursor-pointer">
-                    {fotoSinFondo2 ? (
-                      <div>
-                        <CheckCircle className="h-10 w-10 text-green-500 mx-auto mb-2" />
-                        <p className="text-sm font-medium text-gray-700 mb-1">
-                          {fotoSinFondo2.name}
-                        </p>
-                        <p className="text-xs text-gray-500">
-                          Haz clic para cambiar
-                        </p>
-                      </div>
+                <div className="space-y-1.5">
+                  <span className="text-[15.5px] font-semibold text-gray-800">
+                    Foto 2 (página 3 PDF)
+                  </span>
+                  <label className="flex aspect-video cursor-pointer flex-col items-center justify-center gap-2 overflow-hidden rounded-2xl border-2 border-dashed border-gray-200 bg-gray-50/50 text-center transition-colors duration-150 hover:border-gray-400">
+                    {fotoSinFondo2Preview ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={fotoSinFondo2Preview}
+                        alt=""
+                        className="size-full object-contain"
+                      />
                     ) : (
-                      <div>
-                        <ImageIcon className="h-10 w-10 text-purple-400 mx-auto mb-2" />
-                        <p className="text-sm font-medium text-gray-700 mb-1">
-                          Subir foto sin fondo
-                        </p>
-                        <p className="text-xs text-gray-500">
-                          Para la página 3 del PDF
-                        </p>
-                      </div>
+                      <>
+                        <ImageIcon
+                          className="size-6 text-gray-400"
+                          strokeWidth={1.75}
+                          aria-hidden
+                        />
+                        <span className="px-3 text-[16px] text-gray-500">
+                          Clic para subir
+                        </span>
+                      </>
                     )}
                     <input
                       type="file"
                       accept="image/*"
-                      onChange={(e) =>
-                        setFotoSinFondo2(e.target.files?.[0] || null)
-                      }
                       className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) handleSlotSelected("fotoSinFondo2", file);
+                        e.target.value = "";
+                      }}
                     />
-                  </div>
-                </label>
+                  </label>
+                </div>
               </div>
             </div>
-          </div>
-        </div>
+          </FormSection>
 
-        {/* Botones */}
-        <div className="flex gap-4 justify-end">
-          <Link
-            href="/dashboard/remolques"
-            className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
-          >
-            Cancelar
-          </Link>
-          <button
-            type="submit"
-            disabled={loading}
-            className="px-6 py-3 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 disabled:bg-gray-400 flex items-center gap-2"
-          >
-            {loading ? (
-              <>
-                <Upload className="h-5 w-5 animate-spin" />
-                Creando...
-              </>
-            ) : (
-              <>
-                <Save className="h-5 w-5" />
-                Crear Remolque
-              </>
-            )}
-          </button>
-        </div>
+          <div className="col-span-full flex justify-end gap-3 border-t border-gray-100 pt-6">
+            <AdminButton variant="secondary" href="/admin/remolques">
+              Cancelar
+            </AdminButton>
+            <AdminButton
+              type="submit"
+              variant="primary"
+              icon={loading ? Loader2 : Save}
+              disabled={loading}
+              className={loading ? "[&_svg]:animate-spin" : undefined}
+            >
+              {loading ? "Creando remolque..." : "Crear remolque"}
+            </AdminButton>
+          </div>
+        </FormShell>
       </form>
     </div>
   );

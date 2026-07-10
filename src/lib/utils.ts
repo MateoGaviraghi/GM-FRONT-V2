@@ -1,5 +1,19 @@
 import { type ClassValue, clsx } from "clsx";
-import { twMerge } from "tailwind-merge";
+import { extendTailwindMerge } from "tailwind-merge";
+
+/**
+ * twMerge extendido: le enseñamos las utilities custom del tema GM
+ * (escala display de @theme). Sin esto, twMerge clasifica
+ * "text-display-2" como color de texto y la elimina al combinarla
+ * con "text-platinum"/"text-ink-0".
+ */
+const twMerge = extendTailwindMerge({
+  extend: {
+    classGroups: {
+      "font-size": [{ text: ["display-1", "display-2", "display-3"] }],
+    },
+  },
+});
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
