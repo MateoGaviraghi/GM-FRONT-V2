@@ -536,7 +536,7 @@ export function UsadosListado() {
                 placeholder="Buscar vehículos..."
                 value={busqueda}
                 onChange={(e) => setBusqueda(e.target.value)}
-                className="w-full border border-line-light-2 bg-paper-0 py-3 pl-11 pr-10 text-sm text-ink-0 placeholder:text-ink-2 transition-colors focus:border-petrol-deep focus:outline-none"
+                className="w-full border border-line-light-2 bg-paper-0 py-3 pl-11 pr-10 text-[16px] sm:text-sm text-ink-0 placeholder:text-ink-2 transition-colors focus:border-petrol-deep focus:outline-none"
               />
               {busqueda ? (
                 <button
@@ -721,7 +721,7 @@ function FilterPill({
     <button
       onClick={onClick}
       className={cn(
-        "gm-label border px-4 py-2 transition-colors",
+        "gm-label min-h-11 border px-4 py-2 transition-colors",
         active
           ? "border-petrol-deep bg-petrol-dim text-petrol-deep"
           : "border-line-light-2 text-ink-2 hover:border-ink-2 hover:text-ink-0"
@@ -754,7 +754,7 @@ function FilterSelect({
         <select
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          className="w-full appearance-none border border-line-light-2 bg-paper-0 px-4 py-3 pr-10 text-sm text-ink-0 transition-colors hover:border-ink-2 focus:border-petrol-deep focus:outline-none"
+          className="w-full appearance-none border border-line-light-2 bg-paper-0 px-4 py-3 pr-10 text-[16px] sm:text-sm text-ink-0 transition-colors hover:border-ink-2 focus:border-petrol-deep focus:outline-none"
         >
           <option value={allValue}>{allLabel}</option>
           {options.map((o) => (

@@ -32,8 +32,9 @@ export function ScrollToTopButton() {
       {isVisible && (
         <button
           onClick={scrollToTop}
-          className="animate-fade-in fixed bottom-6 right-6 z-50 flex size-12 items-center justify-center border backdrop-blur-sm transition-colors duration-300"
+          className="animate-fade-in fixed right-6 z-50 flex size-12 items-center justify-center border backdrop-blur-sm transition-colors duration-300"
           style={{
+            bottom: "calc(1.5rem + env(safe-area-inset-bottom, 0px))",
             background: "color-mix(in oklab, var(--gm-carbon-0) 85%, transparent)",
             borderColor: "var(--gm-line-dark-2)",
             color: "var(--gm-platinum)",

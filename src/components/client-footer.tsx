@@ -88,7 +88,7 @@ export function ClientFooter() {
                   <li key={link.href}>
                     <Link
                       href={link.href}
-                      className="group flex items-center gap-2 text-sm text-silver transition-colors duration-300 hover:text-platinum"
+                      className="group flex min-h-11 items-center gap-2 text-sm text-silver transition-colors duration-300 hover:text-platinum"
                     >
                       <span className="gm-underline">{link.label}</span>
                       <ArrowUpRight
@@ -150,7 +150,7 @@ export function ClientFooter() {
             </p>
             <a
               href="tel:+5493424216850"
-              className="gm-underline mt-3 inline-block text-sm text-silver transition-colors hover:text-platinum"
+              className="gm-underline relative inline-flex items-center py-3 -mb-3 text-sm text-silver transition-colors hover:text-platinum"
             >
               +54 9 342 421 6850
             </a>
@@ -162,7 +162,7 @@ export function ClientFooter() {
             </p>
             <a
               href="mailto:hguzmanmotors@gmail.com"
-              className="gm-underline mt-3 inline-block text-sm text-silver transition-colors hover:text-platinum"
+              className="gm-underline relative inline-flex items-center py-3 -mb-3 text-sm text-silver transition-colors hover:text-platinum"
             >
               hguzmanmotors@gmail.com
             </a>

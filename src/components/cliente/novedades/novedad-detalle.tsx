@@ -370,14 +370,14 @@ export function NovedadDetalle() {
           >
             <Link
               href="/"
-              className="text-ink-2 transition-colors hover:text-petrol-deep"
+              className="relative inline-flex items-center py-2.5 -my-2.5 text-ink-2 transition-colors hover:text-petrol-deep"
             >
               Inicio
             </Link>
             <span className="text-ink-2/40">/</span>
             <Link
               href="/novedades"
-              className="text-ink-2 transition-colors hover:text-petrol-deep"
+              className="relative inline-flex items-center py-2.5 -my-2.5 text-ink-2 transition-colors hover:text-petrol-deep"
             >
               Novedades
             </Link>
@@ -405,7 +405,7 @@ export function NovedadDetalle() {
           {novedad.categoria ? (
             <Link
               href={`/novedades?categoria=${encodeURIComponent(novedad.categoria)}`}
-              className="inline-flex items-center gap-1.5 border border-line-light-2 bg-paper-2 px-3 py-1 text-ink-1 transition-colors hover:border-petrol-deep hover:text-petrol-deep"
+              className="relative inline-flex items-center gap-1.5 border border-line-light-2 bg-paper-2 px-3 py-1 text-ink-1 transition-colors before:absolute before:-inset-x-1 before:-inset-y-2 before:content-[''] hover:border-petrol-deep hover:text-petrol-deep"
             >
               <Tag className="size-3.5" strokeWidth={1.75} />
               {novedad.categoria}

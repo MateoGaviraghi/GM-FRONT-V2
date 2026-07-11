@@ -379,7 +379,7 @@ export function UsadoDetalle() {
           <Link
             href="/usados"
             data-hero-soft
-            className="group inline-flex w-fit items-center gap-2.5 text-silver transition-colors hover:text-platinum"
+            className="group relative inline-flex w-fit items-center gap-2.5 py-3 -my-3 text-silver transition-colors hover:text-platinum"
           >
             <ArrowLeft
               strokeWidth={1.5}
@@ -753,11 +753,11 @@ function DatasheetList({
             dark ? "border-line-dark" : "border-line-light"
           }`}
         >
-          <dt className={`gm-label ${dark ? "text-steel" : "text-ink-2"}`}>
+          <dt className={`gm-label shrink-0 ${dark ? "text-steel" : "text-ink-2"}`}>
             {it.label}
           </dt>
           <dd
-            className={`text-right text-sm ${dark ? "text-platinum" : "text-ink-0"}`}
+            className={`min-w-0 break-words text-right text-sm ${dark ? "text-platinum" : "text-ink-0"}`}
           >
             {it.value}
           </dd>

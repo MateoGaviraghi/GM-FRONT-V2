@@ -402,7 +402,7 @@ export function RemolqueDetalle() {
           <Link
             href="/remolques"
             data-hero-soft
-            className="group inline-flex w-fit items-center gap-2.5 text-silver transition-colors hover:text-platinum"
+            className="group relative inline-flex w-fit items-center gap-2.5 py-3 -my-3 text-silver transition-colors hover:text-platinum"
           >
             <ArrowLeft
               strokeWidth={1.5}
@@ -767,8 +767,8 @@ function DatasheetList({
           data-datasheet-row
           className="flex justify-between gap-6 border-b border-line-dark py-3"
         >
-          <dt className="gm-label text-steel">{it.label}</dt>
-          <dd className="text-right text-sm text-platinum">{it.value}</dd>
+          <dt className="gm-label shrink-0 text-steel">{it.label}</dt>
+          <dd className="min-w-0 break-words text-right text-sm text-platinum">{it.value}</dd>
         </div>
       ))}
     </dl>
@@ -834,8 +834,8 @@ function IndexedRows({ items }: { items: KV[] }) {
           <span className="gm-label w-9 shrink-0 text-petrol-bright">
             {String(i + 1).padStart(2, "0")}
           </span>
-          <span className="gm-label flex-1 text-steel">{it.label}</span>
-          <span className="text-right text-sm text-platinum">{it.value}</span>
+          <span className="gm-label flex-1 shrink-0 text-steel">{it.label}</span>
+          <span className="min-w-0 break-words text-right text-sm text-platinum">{it.value}</span>
         </div>
       ))}
     </div>

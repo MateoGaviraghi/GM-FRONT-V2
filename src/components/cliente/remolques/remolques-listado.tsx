@@ -534,7 +534,7 @@ export function RemolquesListado() {
                 placeholder="Buscar remolques..."
                 value={busqueda}
                 onChange={(e) => setBusqueda(e.target.value)}
-                className="w-full border border-line-dark-2 bg-carbon-0 py-3 pl-11 pr-10 text-sm text-platinum placeholder:text-steel transition-colors focus:border-petrol-bright focus:outline-none"
+                className="w-full border border-line-dark-2 bg-carbon-0 py-3 pl-11 pr-10 text-[16px] sm:text-sm text-platinum placeholder:text-steel transition-colors focus:border-petrol-bright focus:outline-none"
               />
               {busqueda ? (
                 <button
@@ -730,7 +730,7 @@ function FilterPill({
     <button
       onClick={onClick}
       className={cn(
-        "gm-label border px-4 py-2 transition-colors",
+        "gm-label min-h-11 border px-4 py-2 transition-colors",
         active
           ? "border-petrol-bright bg-petrol-dim text-petrol-bright"
           : "border-line-dark text-steel hover:border-line-dark-2 hover:text-platinum"
@@ -763,7 +763,7 @@ function FilterSelect({
         <select
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          className="w-full appearance-none border border-line-dark-2 bg-carbon-0 px-4 py-3 pr-10 text-sm text-platinum transition-colors hover:border-line-dark-2 focus:border-petrol-bright focus:outline-none"
+          className="w-full appearance-none border border-line-dark-2 bg-carbon-0 px-4 py-3 pr-10 text-[16px] sm:text-sm text-platinum transition-colors hover:border-line-dark-2 focus:border-petrol-bright focus:outline-none"
         >
           <option value={allValue}>{allLabel}</option>
           {options.map((o) => (

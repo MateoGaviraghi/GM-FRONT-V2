@@ -183,6 +183,11 @@
     letter-spacing: 0.22em;
     text-transform: uppercase;
   }
+  @media (max-width: 640px) {
+    .gm-label {
+      font-size: 0.75rem;
+    }
+  }
 
   /* Underline reveal (links) */
   .gm-underline {

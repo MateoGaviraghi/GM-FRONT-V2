@@ -310,7 +310,7 @@ export function CategoryTemplate({ data }: { data: CategoryData }) {
           <Link
             href="/foton"
             data-hero-soft
-            className="group inline-flex w-fit items-center gap-2.5 text-silver transition-colors hover:text-platinum"
+            className="group inline-flex w-fit items-center gap-2.5 py-3 -my-3 text-silver transition-colors hover:text-platinum"
           >
             <span
               data-back-arrow
