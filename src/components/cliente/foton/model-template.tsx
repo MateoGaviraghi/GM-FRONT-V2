@@ -484,7 +484,7 @@ export function ModelTemplate({ data }: { data: ModelData }) {
             <Link
               href={data.category.href}
               data-hero-soft
-              className="group inline-flex w-fit items-center gap-2.5 text-silver transition-colors hover:text-platinum"
+              className="group inline-flex w-fit items-center gap-2.5 py-3 -my-3 text-silver transition-colors hover:text-platinum"
             >
               <ArrowLeft
                 strokeWidth={1.5}

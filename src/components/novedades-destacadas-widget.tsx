@@ -236,14 +236,14 @@ export function NovedadesDestacadasWidget({
           <>
             <button
               onClick={prevSlide}
-              className="absolute left-4 top-1/2 -translate-y-1/2 p-4 bg-white/95 hover:bg-white rounded-2xl shadow-2xl opacity-0 group-hover:opacity-100 transition-all duration-300 hover:scale-110"
+              className="absolute left-4 top-1/2 -translate-y-1/2 p-4 bg-white/95 hover:bg-white rounded-2xl shadow-2xl opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-all duration-300 hover:scale-110"
               aria-label="Anterior"
             >
               <ChevronLeft className="h-7 w-7 text-slate-900" />
             </button>
             <button
               onClick={nextSlide}
-              className="absolute right-4 top-1/2 -translate-y-1/2 p-4 bg-white/95 hover:bg-white rounded-2xl shadow-2xl opacity-0 group-hover:opacity-100 transition-all duration-300 hover:scale-110"
+              className="absolute right-4 top-1/2 -translate-y-1/2 p-4 bg-white/95 hover:bg-white rounded-2xl shadow-2xl opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-all duration-300 hover:scale-110"
               aria-label="Siguiente"
             >
               <ChevronRight className="h-7 w-7 text-slate-900" />

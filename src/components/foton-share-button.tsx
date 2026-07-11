@@ -36,9 +36,10 @@ export function FotonShareButton({
           onClick={() => setIsModalOpen(true)}
           aria-label="Compartir vehículo"
           className={cn(
-            "group fixed bottom-[5.5rem] right-6 z-[9998] flex size-12 items-center justify-center border border-line-dark-2 bg-carbon-0/70 text-platinum backdrop-blur-md transition-colors duration-300 hover:border-platinum hover:bg-platinum hover:text-carbon-0",
+            "group fixed right-6 z-[9998] flex size-12 items-center justify-center border border-line-dark-2 bg-carbon-0/70 text-platinum backdrop-blur-md transition-colors duration-300 hover:border-platinum hover:bg-platinum hover:text-carbon-0",
             className
           )}
+          style={{ bottom: "calc(5.5rem + env(safe-area-inset-bottom, 0px))" }}
         >
           <Share2 className="size-5" strokeWidth={1.5} />
         </button>

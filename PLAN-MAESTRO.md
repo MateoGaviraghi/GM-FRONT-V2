@@ -204,6 +204,84 @@ PENDIENTE que queda del barrido: nada bloqueante. Backlog §7 sin cambios
 (remolques update-with-media, register público, borrar dev-seeder, PDFs pesados
 4-11MB son fichas descargables — decisión de Mateo si comprimirlas).
 
+**2026-07-10 — DEPLOY A PRODUCCIÓN: COMPLETO Y VERIFICADO.**
+Infra real (Mateo la tenía configurada): FRONT = Vercel proyecto `guzman-motors`
+→ www.guzmanmotors.com.ar (NEXT_PUBLIC_API_URL=https://gm-back-v2.fly.dev/api) ·
+BACK = Fly.io app `gm-back-v2` región gru, secrets completos (Mongo Atlas
+compartida dev/prod, Cloudinary, JWT, CORS_ORIGINS). Deploys hechos desde el
+directorio local (fly deploy --remote-only / vercel --prod) porque la auth de
+GitHub del equipo está VENCIDA (token inválido — push pendiente de `gh auth login`).
+Pre-deploy: REGISTER CERRADO (POST /usuarios ahora JWT+admin; verificado 401 en
+prod) — resuelve el ítem de seguridad de §7; contraseña de dev-seeder REMOVIDA
+del plan; capturas de referencia movidas de public/ a design-refs-admin/; archivo
+basura `nul` (nombre reservado Windows) borrado — rompía git add.
+Git: front commit 84364e9 (todo el rediseño, 294 archivos) + back ec21dfc
+(validaciones + register + PDF GM), dev mergeado a main en AMBOS repos (front
+resolvió conflicto package-lock con versión dev). TODO SIN PUSHEAR hasta re-auth.
+Verificación en prod: back 401 register/400 id inválido/200 público · dominio
+sirve versión nueva (marcadores gm-display en home, login Soft SaaS con
+"Iniciar sesión"+rounded-2xl, webp nuevos referenciados, /remolques 200,
+redirect legacy 308). Fly con auto_stop min=0: primer request tras inactividad
+tiene cold start de ~2-4s (subir min_machines_running a 1 si molesta).
+PENDIENTES POST-DEPLOY para Mateo: (1) ~~gh auth login y push~~ HECHO 2026-07-10
+(repos 100% sync, Action de Fly en verde); (2) crear su usuario admin real y
+borrar dev-seeder; (3) decidir compresión de PDFs 4-11MB.
+
+**2026-07-10 — SPRINT RESPONSIVE "NIVEL APP" (público): COMPLETO 11/11.**
+Skills instaladas global (~/.claude/skills): imagegen-frontend-mobile,
+mobile-android-design, mobile-app-ui-design, responsive-design,
+flutter-build-responsive-layout. Auditoría: batería DOM propia del director
+(overflow/tap-targets/tiny-fonts/zoom-inputs/broken/edge/clipped/squeezed) en
+30 rutas @390 + 10 @768 + 2 auditores de código. SANO de base: 0 overflow en
+todo, GSAP/pinned/Draggable/sticky con guards correctos. CORREGIDO (recetas
+R1-R9 del director, desktop intacto — todo mobile-prefixed o expansión
+invisible py/-my): (1) tap-targets ≥44px: nav drawer+footer (min-h-11),
+tel/email (py-3 -my-3), sociales (size-11), "Volver a X" en category/model/
+remolque/usado (py-3 -my-3), breadcrumbs novedad (py-2.5), chip categoría
+(pseudo before -inset-y-2 = hit 44px), FilterPills (min-h-11); (2) anti-zoom
+iOS: inputs/selects de los 3 listados + contacto a text-[16px] sm:<original>;
+(3) hover-only→touch: Maximize2 galería y chevrons widget ahora
+"opacity-100 md:opacity-0 md:group-hover:opacity-100"; (4) safe-area:
+share-button y scroll-to-top con bottom calc(...+env(safe-area-inset-bottom));
+(5) .gm-label 11px→12px SOLO mobile (@media max-640 en globals). FALSO
+POSITIVO: "edge" del home = slides del marquee cruzando el borde (por diseño).
+LECCIÓN (regla 21 otra vez): tras editar un componente compartido, rutas ya
+compiladas por Turbopack sirven el chunk viejo — /contacto y /foton "fallaban"
+por caché; restart del server y pasaron.
+SÍNTOMA NUEVO de la misma regla 21 (2026-07-10): "SPLASH INFINITO" — Turbopack
+podrido sirve SSR viejo + cliente nuevo → hydration mismatch masivo → React
+nunca completa la hidratación → los timers del splash (page-transition.tsx,
+450/800ms) jamás corren y el telón queda pegado para siempre (diagnóstico:
+sessionStorage 'gm-splash' queda null). Fix: kill 3001+3005 + rm .next +
+relanzar ambos (comparten .next). Verificado: splash entra y sale en <1s tras
+la limpieza. Verificación final del director en
+vivo: 11/11 rutas PASA + tsc limpio. SIN DEPLOYAR aún (commit pendiente de
+OK de Mateo).
+
+**2026-07-10 — PDFs FICHA TÉCNICA "NIVEL FOLLETO FOTON" (back): COMPLETO.**
+Director estudió visualmente el folleto FOTON G7 real (poppler instalado global
+vía winget para renderizar PDFs a PNG: pdftoppm en
+%LOCALAPPDATA%/Microsoft/WinGet/Packages/oschwartz10612.Poppler_*/poppler-*/Library/bin/).
+Diseño "FICHA GM" en ambos endpoints existentes (remolques y usados
+/:id/ficha-tecnica, pdfkit, sin tocar rutas/lógica/fetch Cloudinary):
+A4 APAISADO · Pág1 portada foto full-bleed con degradado carbón reforzado
+(0→0.55@45%→0.96), logos arriba-izq, FICHA TÉCNICA tracked arriba-der, eyebrow
+petrolBright (condición·categoría·marca / tipo·año·km), título Helvetica-
+BoldOblique 42/30 máx 2 líneas + barra petrol + subtítulo; sin foto → portada
+tipográfica con watermark 120pt 5% · Pág2 técnica clara estilo FOTON: banda de
+marca carbón 72pt con título der, banda CARACTERÍSTICAS TÉCNICAS, tabla
+agrupada (categoría en celda panel SIN hairlines cruzadas — líneas de fila
+desde x=158; filas de altura dinámica 17/29 para valores de 2 líneas sin "…"),
+2 placas de foto der (fallback placa carbón con logo / panel), banda de
+contacto carbón 60pt (dirección/tel/email/horarios reales) · Pág3+ EQUIPAMIENTO
+2 columnas con "+" petrol (remolques: DE SERIE/OPCIONAL; usados: lista única),
+paginación dinámica. Iteración v2→v4 con revisión VISUAL del director
+(pdftoppm→Read): fix tachado de categorías, fix wrap de valores (redondeo
+pdfkit: fila 29pt / height 21), fix legibilidad eyebrow. Build nest limpio.
+SIN DEPLOYAR (junto con el sprint responsive — ambos esperan OK de Mateo:
+back = fly deploy o push a main con Action; front = commit responsive +
+vercel --prod).
+
 ---
 
 ## 1. CÓMO SE TRABAJA (loop de ahorro de tokens)

@@ -253,7 +253,7 @@ export function RemolqueGallery({
             type="button"
             onClick={() => setLightbox(true)}
             aria-label="Ampliar"
-            className="absolute right-4 top-4 z-20 flex size-10 items-center justify-center border border-line-dark-2 bg-carbon-0/70 text-platinum opacity-0 backdrop-blur-sm transition-all hover:bg-platinum hover:text-carbon-0 group-hover:opacity-100"
+            className="absolute right-4 top-4 z-20 flex size-10 items-center justify-center border border-line-dark-2 bg-carbon-0/70 text-platinum opacity-100 md:opacity-0 backdrop-blur-sm transition-all hover:bg-platinum hover:text-carbon-0 md:group-hover:opacity-100"
           >
             <Maximize2 className="size-4" strokeWidth={1.5} />
           </button>

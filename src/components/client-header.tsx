@@ -229,7 +229,7 @@ export function ClientHeader() {
                     onClick={toggleMenu}
                     style={{ animationDelay: `${i * 45}ms` }}
                     className={cn(
-                      "animate-fade-in flex items-baseline gap-4 border-b border-line-dark py-4",
+                      "animate-fade-in flex min-h-11 items-center gap-4 border-b border-line-dark",
                       isActive(item.href) ? "text-petrol-bright" : "text-platinum"
                     )}
                   >

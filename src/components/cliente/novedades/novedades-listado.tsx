@@ -334,7 +334,7 @@ export function NovedadesListado() {
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Buscar novedades..."
-                  className="w-full border border-line-light-2 bg-paper-0 py-3 pl-11 pr-10 text-sm text-ink-0 placeholder:text-ink-2 transition-colors focus:border-petrol-deep focus:outline-none"
+                  className="w-full border border-line-light-2 bg-paper-0 py-3 pl-11 pr-10 text-[16px] sm:text-sm text-ink-0 placeholder:text-ink-2 transition-colors focus:border-petrol-deep focus:outline-none"
                 />
                 {searchQuery ? (
                   <button
@@ -535,7 +535,7 @@ function NovedadSelect({
         <select
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          className="w-full appearance-none border border-line-light-2 bg-paper-0 px-4 py-3 pr-10 text-sm text-ink-0 transition-colors hover:border-ink-2 focus:border-petrol-deep focus:outline-none"
+          className="w-full appearance-none border border-line-light-2 bg-paper-0 px-4 py-3 pr-10 text-[16px] sm:text-sm text-ink-0 transition-colors hover:border-ink-2 focus:border-petrol-deep focus:outline-none"
         >
           <option value="">{allLabel}</option>
           {normalized.map((o) => (
@@ -565,7 +565,7 @@ function FilterChip({
   children: React.ReactNode;
 }) {
   return (
-    <span className="inline-flex items-center gap-1.5 border border-line-light-2 bg-paper-0 px-3 py-1 text-sm text-ink-1">
+    <span className="inline-flex min-h-11 items-center gap-1.5 border border-line-light-2 bg-paper-0 px-3 py-1 text-sm text-ink-1">
       {icon}
       {children}
       <button

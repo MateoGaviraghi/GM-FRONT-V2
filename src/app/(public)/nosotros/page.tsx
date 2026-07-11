@@ -698,14 +698,14 @@ export default function NosotrosPage() {
               </p>
               <a
                 href="tel:+5493424216850"
-                className="gm-display gm-underline mt-5 inline-block text-xl text-platinum"
+                className="gm-display gm-underline relative mt-2 inline-flex items-center py-3 -mb-3 text-xl text-platinum"
               >
                 +54 9 342 421 6850
               </a>
               <p className="mt-3">
                 <a
                   href="mailto:hguzmanmotors@gmail.com"
-                  className="gm-underline inline-flex items-center gap-2 text-base text-silver transition-colors hover:text-platinum"
+                  className="gm-underline relative inline-flex items-center gap-2 py-3 -my-3 text-base text-silver transition-colors hover:text-platinum"
                 >
                   <Mail
                     className="size-4 text-petrol-bright"
