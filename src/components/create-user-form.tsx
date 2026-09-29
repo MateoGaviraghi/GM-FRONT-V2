@@ -1,327 +1,208 @@
 "use client";
 
-import React, { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import React from "react";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
+import { zodResolver } from "@hookform/resolvers/zod";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { UserPlus, Eye, EyeOff, CheckCircle } from "lucide-react";
+  AdminButton,
+  Field,
+  FormSection,
+  FormShell,
+  SelectField,
+  TextInput,
+  mapApiError,
+  useToast,
+  useUnsavedGuard,
+} from "@/components/admin/kit";
 import { UsuarioService } from "@/services";
 import { CreateUsuarioRequest } from "@/types";
+import { UserPlus, Eye, EyeOff, CheckCircle, AlertCircle } from "lucide-react";
 
-interface FormData {
-  email: string;
-  password: string;
-  confirmPassword: string;
-  nombre: string;
-  role: "user" | "admin";
-}
+const schema = z
+  .object({
+    nombre: z.string().optional(),
+    email: z.string().trim().min(1, "Ingresá el correo electrónico").email("Revisá el correo: falta el @ o el dominio"),
+    role: z.enum(["user", "admin"]),
+    password: z.string().min(8, "La contraseña tiene que tener al menos 8 caracteres"),
+    confirmPassword: z.string().min(1, "Repetí la contraseña"),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: "Las contraseñas no coinciden",
+    path: ["confirmPassword"],
+  });
 
-interface FormErrors {
-  email?: string;
-  password?: string;
-  confirmPassword?: string;
-  nombre?: string;
-  general?: string;
+type FormData = z.infer<typeof schema>;
+
+const DEFAULT_VALUES: FormData = {
+  nombre: "",
+  email: "",
+  role: "user",
+  password: "",
+  confirmPassword: "",
+};
+
+type PasswordInputProps = React.ComponentProps<typeof TextInput>;
+
+function PasswordInput({ className, ...props }: PasswordInputProps) {
+  const [visible, setVisible] = React.useState(false);
+
+  return (
+    <div className="relative">
+      <TextInput {...props} type={visible ? "text" : "password"} className={`pr-12 ${className ?? ""}`} />
+      <button
+        type="button"
+        onClick={() => setVisible((v) => !v)}
+        aria-label={visible ? "Ocultar contraseña" : "Mostrar contraseña"}
+        className="absolute right-1.5 top-1/2 flex size-9 -translate-y-1/2 items-center justify-center rounded-md text-gray-400 transition-colors duration-150 hover:bg-gray-50 hover:text-gray-700"
+      >
+        {visible ? (
+          <EyeOff className="size-5" strokeWidth={1.75} aria-hidden />
+        ) : (
+          <Eye className="size-5" strokeWidth={1.75} aria-hidden />
+        )}
+      </button>
+    </div>
+  );
 }
 
 export function CreateUserForm() {
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [isSuccess, setIsSuccess] = useState(false);
-  const [errors, setErrors] = useState<FormErrors>({});
+  const [createdEmail, setCreatedEmail] = React.useState<string | null>(null);
+  const [error, setError] = React.useState<string | null>(null);
+  const { showToast } = useToast();
 
-  const [formData, setFormData] = useState<FormData>({
-    email: "",
-    password: "",
-    confirmPassword: "",
-    nombre: "",
-    role: "user",
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors, isSubmitting, isDirty },
+  } = useForm<FormData>({
+    resolver: zodResolver(schema),
+    defaultValues: DEFAULT_VALUES,
   });
 
-  const validateForm = (): boolean => {
-    const newErrors: FormErrors = {};
+  useUnsavedGuard(isDirty && !createdEmail);
 
-    // Validar email solo si se proporciona
-    if (
-      formData.email.trim() &&
-      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)
-    ) {
-      newErrors.email = "Email inválido";
-    }
-
-    // Validar contraseña solo si se proporciona
-    if (formData.password && formData.password.length < 8) {
-      newErrors.password = "La contraseña debe tener al menos 8 caracteres";
-    }
-
-    // Validar confirmación de contraseña solo si hay contraseña
-    if (
-      formData.password &&
-      formData.confirmPassword &&
-      formData.password !== formData.confirmPassword
-    ) {
-      newErrors.confirmPassword = "Las contraseñas no coinciden";
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!validateForm()) {
-      return;
-    }
-
-    setIsLoading(true);
-    setErrors({});
+  const onSubmit = async (data: FormData) => {
+    setError(null);
 
     try {
-      // Preparar datos para el endpoint
       const userData: CreateUsuarioRequest = {
-        email: formData.email.trim().toLowerCase(),
-        password: formData.password,
-        nombre: formData.nombre.trim(),
-        role: formData.role,
+        email: data.email.trim().toLowerCase(),
+        password: data.password,
+        nombre: data.nombre?.trim() || undefined,
+        role: data.role,
       };
 
-      // Llamar al servicio
       await UsuarioService.create(userData);
 
-      setIsSuccess(true);
-
-      // Limpiar formulario después de un momento
-      setTimeout(() => {
-        setFormData({
-          email: "",
-          password: "",
-          confirmPassword: "",
-          nombre: "",
-          role: "user",
-        });
-        setIsSuccess(false);
-      }, 3000);
-    } catch (error) {
-      console.error("Error al crear usuario:", error);
-      setErrors({
-        general:
-          error instanceof Error ? error.message : "Error al crear usuario",
-      });
-    } finally {
-      setIsLoading(false);
+      reset(DEFAULT_VALUES);
+      setCreatedEmail(userData.email);
+      showToast({ variant: "success", message: "Usuario creado." });
+    } catch (err) {
+      console.error("Error al crear usuario:", err);
+      // UsuarioService ya traduce 409/400 a mensajes propios
+      const message = err instanceof Error && err.message ? err.message : mapApiError(err);
+      setError(message);
+      showToast({ variant: "danger", message });
     }
   };
 
-  const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
-  ) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
-
-    // Limpiar error específico cuando el usuario empiece a escribir
-    if (errors[name as keyof FormErrors]) {
-      setErrors((prev) => ({
-        ...prev,
-        [name]: undefined,
-      }));
-    }
-  };
-
-  if (isSuccess) {
+  if (createdEmail) {
     return (
-      <Card className="border-green-200">
-        <CardContent className="pt-6">
-          <div className="text-center">
-            <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
-            <h3 className="text-lg font-bold text-slate-800 mb-2">
-              ¡Usuario creado exitosamente!
-            </h3>
-            <p className="text-slate-600">
-              El nuevo usuario ya puede acceder al sistema.
-            </p>
-          </div>
-        </CardContent>
-      </Card>
+      <div className="rounded-2xl border border-gray-100 bg-white p-8 text-center shadow-sm">
+        <span className="mx-auto mb-4 flex size-14 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
+          <CheckCircle className="size-7" strokeWidth={1.75} aria-hidden />
+        </span>
+        <h3 className="mb-2 text-[20px] font-semibold text-gray-900">¡Usuario creado!</h3>
+        <p className="mb-6 text-[16px] text-gray-500">
+          <span className="font-medium text-gray-700">{createdEmail}</span> ya puede ingresar al sistema.
+        </p>
+        <AdminButton variant="secondary" icon={UserPlus} onClick={() => setCreatedEmail(null)}>
+          Crear otro usuario
+        </AdminButton>
+      </div>
     );
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <UserPlus className="w-5 h-5 text-cyan-600" />
-          Crear Nuevo Usuario
-        </CardTitle>
-        <CardDescription>
-          Completa los datos para crear un nuevo usuario en el sistema
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Error general */}
-          {errors.general && (
-            <div className="bg-red-50 border border-red-200 rounded-md p-3">
-              <span className="text-red-700 text-sm">{errors.general}</span>
-            </div>
-          )}
+    <FormShell
+      eyebrow="Usuarios"
+      title="Crear usuario"
+      description="Cargá los datos de acceso. La persona entra con este correo y contraseña."
+    >
+      {error && (
+        <div className="col-span-full flex items-start gap-2 rounded-xl border border-red-100 bg-red-50 p-3">
+          <AlertCircle className="mt-0.5 size-5 shrink-0 text-red-600" strokeWidth={2} aria-hidden />
+          <span className="text-[16px] font-medium text-red-600">{error}</span>
+        </div>
+      )}
 
-          <div className="space-y-2">
-            <Label htmlFor="nombre" className="text-slate-700 font-medium">
-              Nombre Completo
-            </Label>
-            <Input
-              id="nombre"
-              name="nombre"
-              type="text"
-              placeholder="Nombre completo del usuario"
-              value={formData.nombre}
-              onChange={handleChange}
-              className={`border-slate-300 focus:border-cyan-400 focus:ring-cyan-400 ${
-                errors.nombre
-                  ? "border-red-500 focus:border-red-500 focus:ring-red-500"
-                  : ""
-              }`}
-            />
-            {errors.nombre && (
-              <p className="text-red-500 text-xs mt-1">{errors.nombre}</p>
-            )}
-          </div>
+      <form onSubmit={handleSubmit(onSubmit)} className="contents" noValidate>
+        <FormSection title="Datos de la persona" index={1}>
+          <Field label="Nombre completo" htmlFor="nombre" error={errors.nombre?.message}>
+            <TextInput id="nombre" {...register("nombre")} placeholder="Nombre y apellido" autoComplete="off" />
+          </Field>
 
-          <div className="space-y-2">
-            <Label htmlFor="email" className="text-slate-700 font-medium">
-              Correo Electrónico
-            </Label>
-            <Input
-              id="email"
-              name="email"
-              type="email"
-              placeholder="usuario@ejemplo.com"
-              value={formData.email}
-              onChange={handleChange}
-              className={`border-slate-300 focus:border-cyan-400 focus:ring-cyan-400 ${
-                errors.email
-                  ? "border-red-500 focus:border-red-500 focus:ring-red-500"
-                  : ""
-              }`}
-            />
-            {errors.email && (
-              <p className="text-red-500 text-xs mt-1">{errors.email}</p>
-            )}
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="role" className="text-slate-700 font-medium">
-              Rol del Usuario
-            </Label>
-            <select
-              id="role"
-              name="role"
-              value={formData.role}
-              onChange={handleChange}
-              className="flex h-10 w-full rounded-md border border-slate-300 bg-background px-3 py-2 text-sm focus:border-cyan-400 focus:ring-cyan-400 focus:outline-none"
-            >
+          <Field label="Rol" htmlFor="role" hint="El administrador puede gestionar todo el panel.">
+            <SelectField id="role" {...register("role")}>
               <option value="user">Usuario</option>
               <option value="admin">Administrador</option>
-            </select>
-          </div>
+            </SelectField>
+          </Field>
 
-          <div className="space-y-2">
-            <Label htmlFor="password" className="text-slate-700 font-medium">
-              Contraseña
-            </Label>
-            <div className="relative">
-              <Input
-                id="password"
-                name="password"
-                type={showPassword ? "text" : "password"}
-                placeholder="Mínimo 8 caracteres"
-                value={formData.password}
-                onChange={handleChange}
-                className={`border-slate-300 focus:border-cyan-400 focus:ring-cyan-400 pr-10 ${
-                  errors.password
-                    ? "border-red-500 focus:border-red-500 focus:ring-red-500"
-                    : ""
-                }`}
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-400 hover:text-slate-600"
-              >
-                {showPassword ? (
-                  <EyeOff className="h-4 w-4" />
-                ) : (
-                  <Eye className="h-4 w-4" />
-                )}
-              </button>
-            </div>
-            {errors.password && (
-              <p className="text-red-500 text-xs mt-1">{errors.password}</p>
-            )}
-          </div>
-
-          <div className="space-y-2">
-            <Label
-              htmlFor="confirmPassword"
-              className="text-slate-700 font-medium"
-            >
-              Confirmar Contraseña
-            </Label>
-            <div className="relative">
-              <Input
-                id="confirmPassword"
-                name="confirmPassword"
-                type={showConfirmPassword ? "text" : "password"}
-                placeholder="Repite la contraseña"
-                value={formData.confirmPassword}
-                onChange={handleChange}
-                className={`border-slate-300 focus:border-cyan-400 focus:ring-cyan-400 pr-10 ${
-                  errors.confirmPassword
-                    ? "border-red-500 focus:border-red-500 focus:ring-red-500"
-                    : ""
-                }`}
-              />
-              <button
-                type="button"
-                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-400 hover:text-slate-600"
-              >
-                {showConfirmPassword ? (
-                  <EyeOff className="h-4 w-4" />
-                ) : (
-                  <Eye className="h-4 w-4" />
-                )}
-              </button>
-            </div>
-            {errors.confirmPassword && (
-              <p className="text-red-500 text-xs mt-1">
-                {errors.confirmPassword}
-              </p>
-            )}
-          </div>
-
-          <Button
-            type="submit"
-            className="w-full bg-cyan-500 hover:bg-cyan-600 text-white font-medium py-3 mt-6"
-            disabled={isLoading}
+          <Field
+            label="Correo electrónico"
+            htmlFor="email"
+            required
+            error={errors.email?.message}
+            className="md:col-span-2"
           >
-            <UserPlus className="w-4 h-4 mr-2" />
-            {isLoading ? "Creando usuario..." : "Crear Usuario"}
-          </Button>
-        </form>
-      </CardContent>
-    </Card>
+            <TextInput
+              id="email"
+              {...register("email")}
+              type="email"
+              placeholder="usuario@guzmanmotors.com.ar"
+              autoComplete="off"
+              invalid={!!errors.email}
+            />
+          </Field>
+        </FormSection>
+
+        <FormSection title="Contraseña" index={2}>
+          <Field
+            label="Contraseña"
+            htmlFor="password"
+            required
+            error={errors.password?.message}
+            hint="Mínimo 8 caracteres."
+          >
+            <PasswordInput
+              id="password"
+              {...register("password")}
+              autoComplete="new-password"
+              invalid={!!errors.password}
+            />
+          </Field>
+
+          <Field label="Repetir contraseña" htmlFor="confirmPassword" required error={errors.confirmPassword?.message}>
+            <PasswordInput
+              id="confirmPassword"
+              {...register("confirmPassword")}
+              autoComplete="new-password"
+              invalid={!!errors.confirmPassword}
+            />
+          </Field>
+
+          <div className="col-span-full">
+            <AdminButton type="submit" variant="primary" icon={UserPlus} className="w-full" disabled={isSubmitting}>
+              {isSubmitting ? "Creando usuario…" : "Crear usuario"}
+            </AdminButton>
+          </div>
+        </FormSection>
+      </form>
+    </FormShell>
   );
 }
+
+export default CreateUserForm;
