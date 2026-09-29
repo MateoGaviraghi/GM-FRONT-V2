@@ -12,6 +12,7 @@ import {
   LogOut,
   CarFront,
   Newspaper,
+  UserCog,
 } from "lucide-react";
 import { AdminShell, ToastProvider, type AdminNavItem } from "@/components/admin/kit";
 
@@ -93,6 +94,11 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         { label: "Eliminadas", href: "/admin/novedades/eliminadas" },
         { label: "Crear Novedad", href: "/admin/novedades/crear" },
       ],
+    },
+    {
+      label: "Usuarios",
+      href: "/admin/usuarios/crear",
+      icon: UserCog,
     },
   ];
 
